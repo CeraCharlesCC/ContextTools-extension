@@ -1,12 +1,12 @@
-import { defineConfig } from 'vite';
+import { defineConfig, UserConfig } from 'vite';
 import { resolve } from 'path';
-import { copyFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, rmSync } from 'fs';
+import { copyFileSync, mkdirSync, existsSync, renameSync, rmSync } from 'fs';
 
 const targetBrowser = process.env.TARGET_BROWSER || 'chrome';
 const isFirefox = targetBrowser === 'firefox';
 const outDir = isFirefox ? 'dist-firefox' : 'dist-chrome';
 
-export default defineConfig({
+const commonConfig = {
   resolve: {
     alias: {
       '@domain': resolve(__dirname, 'src/domain'),
@@ -21,6 +21,33 @@ export default defineConfig({
     __IS_FIREFOX__: isFirefox,
     __IS_CHROME__: !isFirefox,
   },
+};
+
+// Content script config - must be IIFE format (no ES modules)
+const contentScriptConfig: UserConfig = {
+  ...commonConfig,
+  build: {
+    outDir,
+    emptyOutDir: false,
+    sourcemap: process.env.NODE_ENV === 'development' ? 'inline' : false,
+    minify: process.env.NODE_ENV === 'production',
+    lib: {
+      entry: resolve(__dirname, 'src/presentation/content/index.ts'),
+      name: 'ContextToolsContent',
+      formats: ['iife'],
+      fileName: () => 'content/index.js',
+    },
+    rollupOptions: {
+      output: {
+        extend: true,
+      },
+    },
+  },
+};
+
+// Main config for background, popup, options (ES modules supported)
+const mainConfig: UserConfig = {
+  ...commonConfig,
   build: {
     outDir,
     emptyOutDir: true,
@@ -29,7 +56,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         background: resolve(__dirname, 'src/presentation/background/index.ts'),
-        content: resolve(__dirname, 'src/presentation/content/index.ts'),
         popup: resolve(__dirname, 'src/presentation/popup/index.html'),
         options: resolve(__dirname, 'src/presentation/options/index.html'),
       },
@@ -102,4 +128,18 @@ export default defineConfig({
       },
     },
   ],
+};
+
+// Export based on build mode - use VITE_BUILD_TARGET env var to select
+const buildTarget = process.env.VITE_BUILD_TARGET;
+
+export default defineConfig(() => {
+  if (buildTarget === 'content') {
+    return contentScriptConfig;
+  }
+  if (buildTarget === 'main') {
+    return mainConfig;
+  }
+  // Default: return main config (for single build compatibility)
+  return mainConfig;
 });

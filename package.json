@@ -4,12 +4,12 @@
   "description": "Cross-browser extension with Clean/Hexagonal Architecture",
   "type": "module",
   "scripts": {
-    "dev": "vite build --watch --mode development",
-    "dev:chrome": "cross-env TARGET_BROWSER=chrome vite build --watch --mode development",
-    "dev:firefox": "cross-env TARGET_BROWSER=firefox vite build --watch --mode development",
+    "dev": "npm run dev:chrome",
+    "dev:chrome": "cross-env TARGET_BROWSER=chrome VITE_BUILD_TARGET=main vite build --watch --mode development",
+    "dev:firefox": "cross-env TARGET_BROWSER=firefox VITE_BUILD_TARGET=main vite build --watch --mode development",
     "build": "npm run build:chrome && npm run build:firefox",
-    "build:chrome": "cross-env TARGET_BROWSER=chrome vite build",
-    "build:firefox": "cross-env TARGET_BROWSER=firefox vite build",
+    "build:chrome": "cross-env TARGET_BROWSER=chrome VITE_BUILD_TARGET=main vite build && cross-env TARGET_BROWSER=chrome VITE_BUILD_TARGET=content vite build",
+    "build:firefox": "cross-env TARGET_BROWSER=firefox VITE_BUILD_TARGET=main vite build && cross-env TARGET_BROWSER=firefox VITE_BUILD_TARGET=content vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
     "clean": "rimraf dist dist-chrome dist-firefox"

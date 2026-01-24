@@ -22,6 +22,12 @@ let lastMarkerCandidate: Marker | null = null;
 let isEnabled = true;
 let isCopying = false;
 
+// Observer state for throttling and cleanup
+let pageObserver: MutationObserver | null = null;
+let menuObserver: MutationObserver | null = null;
+let pendingInjectFrame: number | null = null;
+let copyButtonInjected = false;
+
 // Message handler for content script
 adapters.messaging.addListener(async (message: { type: string; payload?: unknown }) => {
   switch (message.type) {
@@ -213,26 +219,29 @@ function findIssueAnchorButton(): HTMLElement | null {
 }
 
 function findPrAnchorButton(): HTMLElement | null {
-  return (
-    document.querySelector('button[aria-label="Edit Pull Request title"]') ??
-    document.querySelector('button.js-title-edit-button')
-  );
-}
+  // Try permission-dependent edit button first
+  const editButton =
+    document.querySelector<HTMLElement>('button[aria-label="Edit Pull Request title"]') ??
+    document.querySelector<HTMLElement>('button.js-title-edit-button');
+  if (editButton) return editButton;
 
-function injectCopyButton(): void {
-  if (!currentPage) return;
-  if (document.querySelector(COPY_BUTTON_SELECTOR)) {
-    copyButton = document.querySelector(COPY_BUTTON_SELECTOR) as HTMLButtonElement;
-    updateCopyButtonState();
-    return;
+  // Fallback: find the header actions area (always present)
+  const header =
+    document.querySelector('#partial-discussion-header') ??
+    document.querySelector('.gh-header');
+  if (!header) return null;
+
+  // Look for copy link button or any action button in header
+  const copyIcon = header.querySelector('button svg.octicon-copy');
+  if (copyIcon) return copyIcon.closest('button');
+
+  // Fallback to header actions container
+  const actionsContainer = header.querySelector('.gh-header-actions');
+  if (actionsContainer?.firstElementChild) {
+    return actionsContainer.firstElementChild as HTMLElement;
   }
 
-  const anchor = currentPage.kind === 'pull' ? findPrAnchorButton() : findIssueAnchorButton();
-  if (!anchor || !anchor.parentElement) return;
-
-  copyButton = createCopyButton();
-  anchor.parentElement.insertBefore(copyButton, anchor);
-  updateCopyButtonState();
+  return null;
 }
 
 function resolveMarkerForMenu(menu: Element): Marker | null {
@@ -325,21 +334,66 @@ function handleMenuMutation(nodes: NodeList): void {
 }
 
 function observeMenus(): void {
-  const observer = new MutationObserver((mutations) => {
+  menuObserver = new MutationObserver((mutations) => {
+    // Gate early: skip all work when not on an issue/PR page
+    if (!currentPage) return;
+
     mutations.forEach((mutation) => {
       if (mutation.type === 'childList' && mutation.addedNodes.length) {
         handleMenuMutation(mutation.addedNodes);
       }
     });
   });
-  observer.observe(document.body, { childList: true, subtree: true });
+  menuObserver.observe(document.body, { childList: true, subtree: true });
 }
 
 function observePageUpdates(): void {
-  const observer = new MutationObserver(() => {
-    injectCopyButton();
+  pageObserver = new MutationObserver(() => {
+    // Skip if not on an issue/PR page or already injected
+    if (!currentPage || copyButtonInjected) return;
+
+    // Debounce: coalesce rapid mutations into one frame
+    if (pendingInjectFrame !== null) return;
+    pendingInjectFrame = requestAnimationFrame(() => {
+      pendingInjectFrame = null;
+      tryInjectCopyButton();
+    });
   });
-  observer.observe(document.body, { childList: true, subtree: true });
+  pageObserver.observe(document.body, { childList: true, subtree: true });
+}
+
+function tryInjectCopyButton(): void {
+  if (!currentPage || copyButtonInjected) return;
+
+  // Check if already present
+  const existing = document.querySelector(COPY_BUTTON_SELECTOR);
+  if (existing) {
+    copyButton = existing as HTMLButtonElement;
+    copyButtonInjected = true;
+    updateCopyButtonState();
+    disconnectPageObserver();
+    return;
+  }
+
+  const anchor = currentPage.kind === 'pull' ? findPrAnchorButton() : findIssueAnchorButton();
+  if (!anchor || !anchor.parentElement) return;
+
+  copyButton = createCopyButton();
+  anchor.parentElement.insertBefore(copyButton, anchor);
+  copyButtonInjected = true;
+  updateCopyButtonState();
+  disconnectPageObserver();
+}
+
+function disconnectPageObserver(): void {
+  if (pageObserver) {
+    pageObserver.disconnect();
+    pageObserver = null;
+  }
+  if (pendingInjectFrame !== null) {
+    cancelAnimationFrame(pendingInjectFrame);
+    pendingInjectFrame = null;
+  }
 }
 
 function trackMenuClicks(): void {
@@ -358,9 +412,14 @@ function trackMenuClicks(): void {
 }
 
 function handlePageChange(): void {
+  // Disconnect previous observer before resetting state
+  disconnectPageObserver();
+
   currentPage = parsePageRef(window.location.pathname);
   markerRange = {};
   lastMarkerCandidate = null;
+  copyButtonInjected = false;
+
   if (!currentPage) {
     const existing = document.querySelector(COPY_BUTTON_SELECTOR);
     if (existing) {
@@ -369,7 +428,12 @@ function handlePageChange(): void {
     copyButton = null;
     return;
   }
-  injectCopyButton();
+
+  // Try immediate injection, then observe if not yet present
+  tryInjectCopyButton();
+  if (!copyButtonInjected) {
+    observePageUpdates();
+  }
 }
 
 async function init(): Promise<void> {
@@ -386,7 +450,6 @@ async function init(): Promise<void> {
 
   ensureStyles();
   handlePageChange();
-  observePageUpdates();
   observeMenus();
   trackMenuClicks();
 
