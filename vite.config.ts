@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
-import { copyFileSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs';
+import { copyFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, rmSync } from 'fs';
 
 const targetBrowser = process.env.TARGET_BROWSER || 'chrome';
 const isFirefox = targetBrowser === 'firefox';
@@ -55,6 +55,31 @@ export default defineConfig({
 
         if (existsSync(manifestSrc)) {
           copyFileSync(manifestSrc, manifestDest);
+        }
+
+        // Relocate HTML files from nested paths to expected locations
+        const htmlRelocations = [
+          { from: 'src/presentation/popup/index.html', to: 'popup/index.html' },
+          { from: 'src/presentation/options/index.html', to: 'options/index.html' },
+        ];
+
+        for (const { from, to } of htmlRelocations) {
+          const srcPath = resolve(__dirname, outDir, from);
+          const destDir = resolve(__dirname, outDir, to.replace('/index.html', ''));
+          const destPath = resolve(__dirname, outDir, to);
+
+          if (existsSync(srcPath)) {
+            if (!existsSync(destDir)) {
+              mkdirSync(destDir, { recursive: true });
+            }
+            renameSync(srcPath, destPath);
+          }
+        }
+
+        // Clean up empty nested directories
+        const nestedSrcDir = resolve(__dirname, outDir, 'src');
+        if (existsSync(nestedSrcDir)) {
+          rmSync(nestedSrcDir, { recursive: true, force: true });
         }
 
         // Copy static assets

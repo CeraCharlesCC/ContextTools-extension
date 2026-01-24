@@ -79,6 +79,12 @@ body {
   border-bottom: 1px solid var(--border-color);
 }
 
+.setting-row.setting-row-column {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
 .setting-row:last-child {
   border-bottom: none;
   padding-bottom: 0;
@@ -97,6 +103,41 @@ body {
 .setting-description {
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.token-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.text-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+}
+
+.button {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.button.secondary:hover {
+  background: var(--bg-primary);
 }
 
 /* Toggle Switch */

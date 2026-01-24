@@ -1,9 +1,16 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "types": [
+      "node"
+    ],
     "strict": true,
     "noEmit": true,
     "esModuleInterop": true,
@@ -17,13 +24,31 @@
     "sourceMap": true,
     "baseUrl": ".",
     "paths": {
-      "@domain/*": ["src/domain/*"],
-      "@application/*": ["src/application/*"],
-      "@infrastructure/*": ["src/infrastructure/*"],
-      "@presentation/*": ["src/presentation/*"],
-      "@shared/*": ["src/shared/*"]
+      "@domain/*": [
+        "src/domain/*"
+      ],
+      "@application/*": [
+        "src/application/*"
+      ],
+      "@infrastructure/*": [
+        "src/infrastructure/*"
+      ],
+      "@presentation/*": [
+        "src/presentation/*"
+      ],
+      "@shared/*": [
+        "src/shared/*"
+      ]
     }
   },
-  "include": ["src/**/*", "vite.config.ts"],
-  "exclude": ["node_modules", "dist", "dist-chrome", "dist-firefox"]
+  "include": [
+    "src/**/*",
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist-chrome",
+    "dist-firefox"
+  ]
 }
