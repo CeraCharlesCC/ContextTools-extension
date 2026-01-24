@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Context Tools - Options</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
+
 <body>
   <div id="app">
     <header class="header">
@@ -56,6 +58,32 @@
       </section>
 
       <section class="section">
+        <h2>Markdown Export</h2>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="historical-mode-toggle">Timeline Mode</label>
+            <p class="setting-description">Show comments in chronological order</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="historical-mode-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="include-file-diff-toggle">Include File Diffs</label>
+            <p class="setting-description">Include file diff patches in the export</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="include-file-diff-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </section>
+
+      <section class="section">
         <h2>Appearance</h2>
 
         <div class="setting-row">
@@ -75,7 +103,6 @@
         <h2>About</h2>
         <div class="about-info">
           <p><strong>Version:</strong> <span id="version">0.1.0</span></p>
-          <p><strong>Architecture:</strong> Clean + Hexagonal</p>
           <p><strong>Browser:</strong> <span id="browser-type">Detecting...</span></p>
         </div>
       </section>
@@ -86,4 +113,5 @@
 
   <script type="module" src="./main.ts"></script>
 </body>
+
 </html>

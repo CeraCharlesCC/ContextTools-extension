@@ -9,6 +9,8 @@ const adapters = getBrowserAdapters();
 // DOM Elements
 const enabledToggle = document.getElementById('enabled-toggle') as HTMLInputElement;
 const notificationsToggle = document.getElementById('notifications-toggle') as HTMLInputElement;
+const historicalModeToggle = document.getElementById('historical-mode-toggle') as HTMLInputElement;
+const includeFileDiffToggle = document.getElementById('include-file-diff-toggle') as HTMLInputElement;
 const themeSelect = document.getElementById('theme-select') as HTMLSelectElement;
 const githubTokenInput = document.getElementById('github-token') as HTMLInputElement;
 const githubTokenToggle = document.getElementById('github-token-toggle') as HTMLButtonElement;
@@ -36,6 +38,8 @@ async function loadSettings(): Promise<void> {
     enabledToggle.checked = settings.enabled;
     notificationsToggle.checked = settings.notifications;
     themeSelect.value = settings.theme;
+    historicalModeToggle.checked = settings.historicalMode;
+    includeFileDiffToggle.checked = settings.includeFileDiff;
   } catch (error) {
     console.error('Failed to load settings:', error);
     showStatus('Failed to load settings', 'error');
@@ -92,6 +96,14 @@ notificationsToggle.addEventListener('change', () => {
 
 themeSelect.addEventListener('change', () => {
   updateSettings({ theme: themeSelect.value as Settings['theme'] });
+});
+
+historicalModeToggle.addEventListener('change', () => {
+  updateSettings({ historicalMode: historicalModeToggle.checked });
+});
+
+includeFileDiffToggle.addEventListener('change', () => {
+  updateSettings({ includeFileDiff: includeFileDiffToggle.checked });
 });
 
 githubTokenToggle.addEventListener('click', () => {

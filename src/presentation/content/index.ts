@@ -11,16 +11,23 @@ const adapters = getBrowserAdapters();
 
 const IS_GITHUB = window.location.hostname === 'github.com';
 const COPY_BUTTON_SELECTOR = '[data-context-tools="copy-button"]';
-const MENU_SELECTOR = 'ul[role="menu"]';
+const MENU_SELECTOR = 'ul[role="menu"], details-menu[role="menu"]';
 const MENU_ITEM_SELECTOR = '[data-context-tools="menu-item"]';
 
 let currentPage: PageRef | null = null;
 let currentPath = window.location.pathname;
 let markerRange: MarkerRange = {};
 let copyButton: HTMLButtonElement | null = null;
+let settingsDropdown: HTMLDivElement | null = null;
 let lastMarkerCandidate: Marker | null = null;
 let isEnabled = true;
 let isCopying = false;
+
+// Temporary export settings (overrides for current copy operation)
+let tempHistoricalMode: boolean | null = null;
+let tempIncludeFileDiff: boolean | null = null;
+let defaultHistoricalMode = true;
+let defaultIncludeFileDiff = false;
 
 // Observer state for throttling and cleanup
 let pageObserver: MutationObserver | null = null;
@@ -108,6 +115,85 @@ function ensureStyles(): void {
     .context-tools-toast.is-warning {
       background: rgba(161, 98, 7, 0.92);
     }
+
+    .context-tools-button-group {
+      display: inline-flex;
+      align-items: stretch;
+      margin-right: 6px;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .context-tools-button-group .context-tools-copy-button {
+      margin-right: 0;
+      border-radius: 6px 0 0 6px;
+      border-right: none;
+    }
+
+    .context-tools-dropdown-trigger {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3px 6px;
+      border: 1px solid var(--color-btn-border, rgba(27, 31, 36, 0.15));
+      border-radius: 0 6px 6px 0;
+      background: var(--color-btn-bg, #f6f8fa);
+      color: var(--color-fg-default, #1f2328);
+      cursor: pointer;
+    }
+
+    .context-tools-dropdown-trigger:hover {
+      background: var(--color-btn-hover-bg, #f3f4f6);
+    }
+
+    .context-tools-dropdown-trigger svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .context-tools-dropdown {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      z-index: 100;
+      min-width: 200px;
+      margin-top: 4px;
+      padding: 8px 0;
+      border: 1px solid var(--color-border-default, rgba(27, 31, 36, 0.15));
+      border-radius: 6px;
+      background: var(--color-canvas-overlay, #fff);
+      box-shadow: 0 8px 24px rgba(140, 149, 159, 0.2);
+    }
+
+    .context-tools-dropdown[hidden] {
+      display: none;
+    }
+
+    .context-tools-dropdown-header {
+      padding: 4px 12px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--color-fg-muted, #57606a);
+      text-transform: uppercase;
+    }
+
+    .context-tools-dropdown-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 12px;
+      font-size: 12px;
+      color: var(--color-fg-default, #1f2328);
+      cursor: pointer;
+    }
+
+    .context-tools-dropdown-item:hover {
+      background: var(--color-action-list-item-default-hover-bg, rgba(208, 215, 222, 0.32));
+    }
+
+    .context-tools-dropdown-item input[type="checkbox"] {
+      margin-left: 8px;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -163,12 +249,18 @@ async function handleCopyClick(): Promise<void> {
     copyButton.disabled = true;
   }
 
+  // Use temporary overrides if set, otherwise use defaults
+  const historicalMode = tempHistoricalMode ?? defaultHistoricalMode;
+  const includeFiles = tempIncludeFileDiff ?? defaultIncludeFileDiff;
+
   try {
-    const result = await adapters.messaging.sendMessage<{ type: string; payload: { page: PageRef; range?: MarkerRange } }, GenerateMarkdownResult>({
+    const result = await adapters.messaging.sendMessage<{ type: string; payload: { page: PageRef; range?: MarkerRange; historicalMode?: boolean; includeFiles?: boolean } }, GenerateMarkdownResult>({
       type: 'GENERATE_MARKDOWN',
       payload: {
         page: currentPage,
         range: markerRange,
+        historicalMode,
+        includeFiles,
       },
     });
 
@@ -192,7 +284,50 @@ async function handleCopyClick(): Promise<void> {
   }
 }
 
-function createCopyButton(): HTMLButtonElement {
+function createSettingsDropdown(): HTMLDivElement {
+  const dropdown = document.createElement('div');
+  dropdown.className = 'context-tools-dropdown';
+  dropdown.hidden = true;
+
+  const header = document.createElement('div');
+  header.className = 'context-tools-dropdown-header';
+  header.textContent = 'Export Options';
+  dropdown.appendChild(header);
+
+  // Historical mode toggle
+  const historicalItem = document.createElement('label');
+  historicalItem.className = 'context-tools-dropdown-item';
+  historicalItem.innerHTML = `
+    <span>Timeline mode</span>
+    <input type="checkbox" id="context-tools-historical" ${(tempHistoricalMode ?? defaultHistoricalMode) ? 'checked' : ''}>
+  `;
+  const historicalCheckbox = historicalItem.querySelector('input') as HTMLInputElement;
+  historicalCheckbox.addEventListener('change', () => {
+    tempHistoricalMode = historicalCheckbox.checked;
+  });
+  dropdown.appendChild(historicalItem);
+
+  // Include file diff toggle
+  const fileDiffItem = document.createElement('label');
+  fileDiffItem.className = 'context-tools-dropdown-item';
+  fileDiffItem.innerHTML = `
+    <span>Include file diffs</span>
+    <input type="checkbox" id="context-tools-file-diff" ${(tempIncludeFileDiff ?? defaultIncludeFileDiff) ? 'checked' : ''}>
+  `;
+  const fileDiffCheckbox = fileDiffItem.querySelector('input') as HTMLInputElement;
+  fileDiffCheckbox.addEventListener('change', () => {
+    tempIncludeFileDiff = fileDiffCheckbox.checked;
+  });
+  dropdown.appendChild(fileDiffItem);
+
+  return dropdown;
+}
+
+function createCopyButtonGroup(): HTMLDivElement {
+  const group = document.createElement('div');
+  group.className = 'context-tools-button-group';
+  group.style.position = 'relative';
+
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'context-tools-copy-button';
@@ -205,7 +340,33 @@ function createCopyButton(): HTMLButtonElement {
   button.addEventListener('click', () => {
     void handleCopyClick();
   });
-  return button;
+  copyButton = button;
+  group.appendChild(button);
+
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'context-tools-dropdown-trigger';
+  trigger.setAttribute('aria-label', 'Export options');
+  trigger.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/></svg>`;
+
+  const dropdown = createSettingsDropdown();
+  settingsDropdown = dropdown;
+  group.appendChild(dropdown);
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.hidden = !dropdown.hidden;
+  });
+  group.appendChild(trigger);
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!group.contains(e.target as Node)) {
+      dropdown.hidden = true;
+    }
+  });
+
+  return group;
 }
 
 function findIssueAnchorButton(): HTMLElement | null {
@@ -261,6 +422,7 @@ function createMenuItem(template: HTMLElement, label: string, onClick: () => voi
   item.dataset.contextTools = 'menu-item';
   item.removeAttribute('id');
   item.removeAttribute('aria-keyshortcuts');
+  item.removeAttribute('data-hotkey');
   item.tabIndex = -1;
 
   const labelEl =
@@ -274,6 +436,10 @@ function createMenuItem(template: HTMLElement, label: string, onClick: () => voi
     const newId = `context-tools-${label.replace(/\s+/g, '-').toLowerCase()}-${uniqueSuffix}`;
     labelEl.id = newId;
     item.setAttribute('aria-labelledby', newId);
+  } else {
+    // Fallback for templates without span labels (e.g., button.dropdown-item)
+    item.textContent = label;
+    item.setAttribute('aria-label', label);
   }
 
   item.addEventListener('click', (event) => {
@@ -288,12 +454,27 @@ function createMenuItem(template: HTMLElement, label: string, onClick: () => voi
 function isCommentMenu(menu: Element): boolean {
   if (menu.querySelector('li[aria-keyshortcuts="q"]')) return true;
   if (menu.querySelector('li[aria-keyshortcuts="c"]')) return true;
+  if (menu.querySelector('button[data-hotkey="r"]')) return true;
+  if (menu.querySelector('.js-comment-quote-reply')) return true;
+  if (menu.querySelector('.js-comment-edit-button')) return true;
   const text = menu.textContent?.toLowerCase() ?? '';
   if (text.includes('quote reply') || text.includes('copy link')) return true;
   return false;
 }
 
-function injectMenuItems(menu: HTMLUListElement): void {
+function findMenuItemTemplate(menu: Element): HTMLElement | null {
+  // For ul-based menus, use li[role="menuitem"]
+  if (menu.tagName === 'UL') {
+    return menu.querySelector('li[role="menuitem"]');
+  }
+  // For details-menu, prefer button, then anchor
+  return (
+    menu.querySelector('button[role="menuitem"]') ??
+    menu.querySelector('a[role="menuitem"]')
+  );
+}
+
+function injectMenuItems(menu: Element): void {
   if (!currentPage) return;
   if (menu.querySelector(MENU_ITEM_SELECTOR)) return;
   if (!isCommentMenu(menu)) return;
@@ -301,7 +482,7 @@ function injectMenuItems(menu: HTMLUListElement): void {
   const marker = resolveMarkerForMenu(menu);
   if (!marker) return;
 
-  const template = menu.querySelector('li[role="menuitem"]') as HTMLElement | null;
+  const template = findMenuItemTemplate(menu);
   if (!template) return;
 
   const startItem = createMenuItem(template, 'Set start marker', () => {
@@ -322,14 +503,30 @@ function injectMenuItems(menu: HTMLUListElement): void {
   menu.appendChild(endItem);
 }
 
-function handleMenuMutation(nodes: NodeList): void {
-  nodes.forEach((node) => {
+function handleMenuMutation(mutation: MutationRecord): void {
+  // Check if the mutation target is a menu container (async population case)
+  if (mutation.target instanceof Element && mutation.target.matches(MENU_SELECTOR)) {
+    injectMenuItems(mutation.target);
+  }
+
+  // Handle newly added nodes
+  mutation.addedNodes.forEach((node) => {
     if (!(node instanceof Element)) return;
+
+    // Check if the added node is a menu
     if (node.matches(MENU_SELECTOR)) {
-      injectMenuItems(node as HTMLUListElement);
+      injectMenuItems(node);
     }
+
+    // Check descendants for menus
     const menus = node.querySelectorAll(MENU_SELECTOR);
-    menus.forEach((menu) => injectMenuItems(menu as HTMLUListElement));
+    menus.forEach((menu) => injectMenuItems(menu));
+
+    // Check if added node is inside an existing menu (async content population)
+    const closestMenu = node.closest(MENU_SELECTOR);
+    if (closestMenu) {
+      injectMenuItems(closestMenu);
+    }
   });
 }
 
@@ -339,8 +536,8 @@ function observeMenus(): void {
     if (!currentPage) return;
 
     mutations.forEach((mutation) => {
-      if (mutation.type === 'childList' && mutation.addedNodes.length) {
-        handleMenuMutation(mutation.addedNodes);
+      if (mutation.type === 'childList') {
+        handleMenuMutation(mutation);
       }
     });
   });
@@ -378,8 +575,8 @@ function tryInjectCopyButton(): void {
   const anchor = currentPage.kind === 'pull' ? findPrAnchorButton() : findIssueAnchorButton();
   if (!anchor || !anchor.parentElement) return;
 
-  copyButton = createCopyButton();
-  anchor.parentElement.insertBefore(copyButton, anchor);
+  const buttonGroup = createCopyButtonGroup();
+  anchor.parentElement.insertBefore(buttonGroup, anchor);
   copyButtonInjected = true;
   updateCopyButtonState();
   disconnectPageObserver();
@@ -444,6 +641,9 @@ async function init(): Promise<void> {
     });
     isEnabled = settings?.enabled ?? true;
     if (!isEnabled) return;
+    // Load markdown export defaults from settings
+    defaultHistoricalMode = settings?.historicalMode ?? true;
+    defaultIncludeFileDiff = settings?.includeFileDiff ?? false;
   } catch {
     // Default to enabled if settings are unavailable.
   }

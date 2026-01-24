@@ -22,6 +22,8 @@ export interface MarkerRange {
 export interface GenerateMarkdownPayload {
   page: PageRef;
   range?: MarkerRange;
+  historicalMode?: boolean;
+  includeFiles?: boolean;
 }
 
 export interface GenerateMarkdownResponse {

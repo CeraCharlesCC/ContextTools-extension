@@ -6,6 +6,8 @@ export interface Settings {
   readonly enabled: boolean;
   readonly theme: 'light' | 'dark' | 'system';
   readonly notifications: boolean;
+  readonly historicalMode: boolean;
+  readonly includeFileDiff: boolean;
 }
 
 export function createDefaultSettings(): Settings {
@@ -13,6 +15,8 @@ export function createDefaultSettings(): Settings {
     enabled: true,
     theme: 'system',
     notifications: true,
+    historicalMode: true,
+    includeFileDiff: false,
   };
 }
 
@@ -20,6 +24,8 @@ export function validateSettings(settings: Partial<Settings>): settings is Setti
   return (
     typeof settings.enabled === 'boolean' &&
     ['light', 'dark', 'system'].includes(settings.theme ?? '') &&
-    typeof settings.notifications === 'boolean'
+    typeof settings.notifications === 'boolean' &&
+    typeof settings.historicalMode === 'boolean' &&
+    typeof settings.includeFileDiff === 'boolean'
   );
 }

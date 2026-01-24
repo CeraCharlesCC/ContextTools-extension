@@ -122,6 +122,11 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
   const token = await getGitHubToken();
   const { owner, repo, number } = payload.page;
 
+  // Get settings defaults if options not explicitly provided
+  const settings = await getSettingsUseCase.execute();
+  const historicalMode = payload.historicalMode ?? settings.historicalMode;
+  const includeFiles = payload.includeFiles ?? settings.includeFileDiff;
+
   if (payload.page.kind === 'issue') {
     const issue = await getIssue({ owner, repo, number, token });
     const comments = await getIssueComments({ owner, repo, number, token });
@@ -172,7 +177,7 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
         reviewComments: selectedReviewComments,
         reviews: selectedReviews,
         historicalMode: true,
-        includeFiles: false,
+        includeFiles,
       }),
       warning: sliceResult.warning,
     };
@@ -185,8 +190,8 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
       issueComments,
       reviewComments,
       reviews,
-      historicalMode: false,
-      includeFiles: false,
+      historicalMode,
+      includeFiles,
     }),
   };
 }
