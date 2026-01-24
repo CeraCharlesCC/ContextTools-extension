@@ -9,7 +9,8 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "types": [
-      "node"
+      "node",
+      "chrome"
     ],
     "strict": true,
     "noEmit": true,
