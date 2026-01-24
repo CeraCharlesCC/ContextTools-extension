@@ -121,7 +121,7 @@ function ensureStyles(): void {
       align-items: stretch;
       margin-right: 6px;
       border-radius: 6px;
-      overflow: hidden;
+      overflow: visible;
     }
 
     .context-tools-button-group .context-tools-copy-button {
