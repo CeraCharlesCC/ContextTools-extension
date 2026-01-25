@@ -533,7 +533,33 @@ function findIssueAnchorButton(): HTMLElement | null {
   const copyIcon =
     header?.querySelector('button svg.octicon-copy') ??
     document.querySelector('button svg.octicon-copy');
-  return copyIcon?.closest('button') ?? null;
+  if (copyIcon) return copyIcon.closest('button');
+
+  const newIssueButton = findNewIssueButton();
+  if (newIssueButton) return newIssueButton;
+
+  return null;
+}
+
+function findNewIssueButton(): HTMLElement | null {
+  const headerButton =
+    document.querySelector<HTMLElement>(
+      '[class*="HeaderMenu-module__buttonContainer"] a[href*="/issues/new"]',
+    ) ??
+    document.querySelector<HTMLElement>(
+      '#partial-discussion-header a[href*="/issues/new"], .gh-header a[href*="/issues/new"]',
+    );
+  if (headerButton) return headerButton;
+
+  const candidates = Array.from(
+    document.querySelectorAll<HTMLElement>('a[href*="/issues/new"], button'),
+  );
+  return (
+    candidates.find((candidate) => {
+      const text = candidate.textContent?.trim().toLowerCase();
+      return text === 'new issue';
+    }) ?? null
+  );
 }
 
 function findPrAnchorButton(): HTMLElement | null {
@@ -636,13 +662,16 @@ function injectMenuItems(menu: Element): void {
   if (menu.querySelector(MENU_ITEM_SELECTOR)) return;
   if (!isCommentMenu(menu)) return;
 
-  const marker = resolveMarkerForMenu(menu);
-  if (!marker) return;
-
   const template = findMenuItemTemplate(menu);
   if (!template) return;
 
   const startItem = createMenuItem(template, 'Set start marker', () => {
+    const marker = resolveMarkerForMenu(menu);
+    if (!marker) {
+      showToast('Unable to locate marker for this item.', 'error');
+      closeMenu(menu);
+      return;
+    }
     markerRange = { ...markerRange, start: marker };
     updateCopyButtonState();
     showToast('Start marker set.');
@@ -650,6 +679,12 @@ function injectMenuItems(menu: Element): void {
   });
 
   const endItem = createMenuItem(template, 'Set end marker', () => {
+    const marker = resolveMarkerForMenu(menu);
+    if (!marker) {
+      showToast('Unable to locate marker for this item.', 'error');
+      closeMenu(menu);
+      return;
+    }
     markerRange = { ...markerRange, end: marker };
     updateCopyButtonState();
     showToast('End marker set.');
@@ -751,18 +786,21 @@ function disconnectPageObserver(): void {
 }
 
 function trackMenuClicks(): void {
-  document.addEventListener('click', (event) => {
+  const updateCandidate = (event: Event): void => {
     const target = event.target as Element | null;
     if (!target) return;
     const trigger = target.closest('button, summary');
     if (!trigger) return;
-    const label = (trigger.getAttribute('aria-label') || '').toLowerCase();
-    if (!label.includes('comment') && !label.includes('options') && !label.includes('more')) return;
+    if (trigger.closest(MENU_SELECTOR)) return;
     const marker = findMarkerInElement(trigger);
     if (marker) {
       lastMarkerCandidate = marker;
     }
-  });
+  };
+
+  // Capture early to avoid stale markers when menus populate asynchronously.
+  document.addEventListener('pointerdown', updateCandidate, true);
+  document.addEventListener('click', updateCandidate);
 }
 
 function handlePageChange(): void {
