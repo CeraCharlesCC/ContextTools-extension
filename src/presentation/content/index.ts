@@ -549,16 +549,23 @@ function findNewIssueButton(): HTMLElement | null {
     document.querySelector<HTMLElement>(
       '#partial-discussion-header a[href*="/issues/new"], .gh-header a[href*="/issues/new"]',
     );
-  if (headerButton) return headerButton;
+  if (headerButton) {
+    return (
+      headerButton.closest<HTMLElement>('[class*="HeaderMenu-module__buttonContainer"]') ??
+      headerButton
+    );
+  }
 
   const candidates = Array.from(
     document.querySelectorAll<HTMLElement>('a[href*="/issues/new"], button'),
   );
+  const candidate = candidates.find((item) => {
+    const text = item.textContent?.trim().toLowerCase();
+    return text === 'new issue';
+  });
+  if (!candidate) return null;
   return (
-    candidates.find((candidate) => {
-      const text = candidate.textContent?.trim().toLowerCase();
-      return text === 'new issue';
-    }) ?? null
+    candidate.closest<HTMLElement>('[class*="HeaderMenu-module__buttonContainer"]') ?? candidate
   );
 }
 
