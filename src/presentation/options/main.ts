@@ -11,6 +11,8 @@ const enabledToggle = document.getElementById('enabled-toggle') as HTMLInputElem
 const notificationsToggle = document.getElementById('notifications-toggle') as HTMLInputElement;
 const historicalModeToggle = document.getElementById('historical-mode-toggle') as HTMLInputElement;
 const includeFileDiffToggle = document.getElementById('include-file-diff-toggle') as HTMLInputElement;
+const includeCommitDiffToggle = document.getElementById('include-commit-diff-toggle') as HTMLInputElement;
+const smartDiffModeToggle = document.getElementById('smart-diff-mode-toggle') as HTMLInputElement;
 const themeSelect = document.getElementById('theme-select') as HTMLSelectElement;
 const githubTokenInput = document.getElementById('github-token') as HTMLInputElement;
 const githubTokenToggle = document.getElementById('github-token-toggle') as HTMLButtonElement;
@@ -40,6 +42,8 @@ async function loadSettings(): Promise<void> {
     themeSelect.value = settings.theme;
     historicalModeToggle.checked = settings.historicalMode;
     includeFileDiffToggle.checked = settings.includeFileDiff;
+    includeCommitDiffToggle.checked = settings.includeCommit;
+    smartDiffModeToggle.checked = settings.smartDiffMode;
   } catch (error) {
     console.error('Failed to load settings:', error);
     showStatus('Failed to load settings', 'error');
@@ -104,6 +108,14 @@ historicalModeToggle.addEventListener('change', () => {
 
 includeFileDiffToggle.addEventListener('change', () => {
   updateSettings({ includeFileDiff: includeFileDiffToggle.checked });
+});
+
+includeCommitDiffToggle.addEventListener('change', () => {
+  updateSettings({ includeCommit: includeCommitDiffToggle.checked });
+});
+
+smartDiffModeToggle.addEventListener('change', () => {
+  updateSettings({ smartDiffMode: smartDiffModeToggle.checked });
 });
 
 githubTokenToggle.addEventListener('click', () => {

@@ -8,6 +8,8 @@ export interface Settings {
   readonly notifications: boolean;
   readonly historicalMode: boolean;
   readonly includeFileDiff: boolean;
+  readonly includeCommit: boolean;
+  readonly smartDiffMode: boolean;
 }
 
 export function createDefaultSettings(): Settings {
@@ -17,6 +19,8 @@ export function createDefaultSettings(): Settings {
     notifications: true,
     historicalMode: true,
     includeFileDiff: false,
+    includeCommit: false,
+    smartDiffMode: false,
   };
 }
 
@@ -26,6 +30,8 @@ export function validateSettings(settings: Partial<Settings>): settings is Setti
     ['light', 'dark', 'system'].includes(settings.theme ?? '') &&
     typeof settings.notifications === 'boolean' &&
     typeof settings.historicalMode === 'boolean' &&
-    typeof settings.includeFileDiff === 'boolean'
+    typeof settings.includeFileDiff === 'boolean' &&
+    typeof settings.includeCommit === 'boolean' &&
+    typeof settings.smartDiffMode === 'boolean'
   );
 }

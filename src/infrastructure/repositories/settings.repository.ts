@@ -12,13 +12,19 @@ export class SettingsRepository implements SettingsRepositoryPort {
   constructor(private readonly storage: StoragePort) {}
 
   async getSettings(): Promise<Settings> {
-    const stored = await this.storage.get<Settings>(SETTINGS_KEY);
+    const stored = await this.storage.get<Partial<Settings>>(SETTINGS_KEY);
+    const defaults = createDefaultSettings();
 
-    if (stored && validateSettings(stored)) {
-      return stored;
+    if (stored && typeof stored === 'object') {
+      const merged = { ...defaults, ...stored };
+      if (validateSettings(merged)) {
+        if (!validateSettings(stored)) {
+          await this.saveSettings(merged);
+        }
+        return merged;
+      }
     }
 
-    const defaults = createDefaultSettings();
     await this.saveSettings(defaults);
     return defaults;
   }

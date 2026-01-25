@@ -9,6 +9,9 @@ import {
   buildTimelineEvents,
   getIssue,
   getIssueComments,
+  getCommit,
+  getPullCommits,
+  getPullFiles,
   getPullRequest,
   getPullReviewComments,
   getPullReviews,
@@ -118,6 +121,39 @@ function sliceIssueComments(
   return { comments: comments.slice(start, end + 1), warning };
 }
 
+async function getCommitDetailsList(params: {
+  owner: string;
+  repo: string;
+  token: string;
+  commits: any[];
+}): Promise<any[]> {
+  const { owner, repo, token, commits } = params;
+  if (!commits?.length) return [];
+
+  return Promise.all(
+    commits.map(async (commit) => {
+      if (!commit?.sha) return commit;
+      try {
+        return await getCommit({ owner, repo, sha: commit.sha, token });
+      } catch (error) {
+        console.warn('Failed to load commit details:', commit.sha, error);
+        return commit;
+      }
+    })
+  );
+}
+
+function applySmartDiffMode(commits: any[], files: any[]): any[] {
+  if (!commits?.length) return commits;
+  const fileSet = new Set((files ?? []).map((file) => file?.filename).filter(Boolean));
+  return commits.map((commit) => {
+    if (!commit?.files?.length) return commit;
+    const filteredFiles = commit.files.filter((file: any) => fileSet.has(file?.filename));
+    if (filteredFiles.length === commit.files.length) return commit;
+    return { ...commit, files: filteredFiles };
+  });
+}
+
 async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<GenerateMarkdownResult> {
   const token = await getGitHubToken();
   const { owner, repo, number } = payload.page;
@@ -126,6 +162,8 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
   const settings = await getSettingsUseCase.execute();
   const historicalMode = payload.historicalMode ?? settings.historicalMode;
   const includeFiles = payload.includeFiles ?? settings.includeFileDiff;
+  const includeCommit = payload.includeCommit ?? settings.includeCommit;
+  const smartDiffMode = payload.smartDiffMode ?? settings.smartDiffMode;
 
   if (payload.page.kind === 'issue') {
     const issue = await getIssue({ owner, repo, number, token });
@@ -148,8 +186,23 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
     getPullReviews({ owner, repo, number, token }),
   ]);
 
+  const shouldFetchFiles = includeFiles || (includeCommit && smartDiffMode);
+  const shouldFetchCommits = includeCommit;
+
+  const [files, commits] = await Promise.all([
+    shouldFetchFiles ? getPullFiles({ owner, repo, number, token }) : Promise.resolve([]),
+    shouldFetchCommits ? getPullCommits({ owner, repo, number, token }) : Promise.resolve([]),
+  ]);
+
+  const detailedCommits = shouldFetchCommits
+    ? await getCommitDetailsList({ owner, repo, token, commits })
+    : [];
+
+  const finalCommits = includeCommit && smartDiffMode ? applySmartDiffMode(detailedCommits, files) : detailedCommits;
+
   if (payload.range?.start || payload.range?.end) {
     const events = buildTimelineEvents({
+      commits: includeCommit ? finalCommits : undefined,
       issueComments,
       reviewComments,
       reviews,
@@ -173,11 +226,14 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
       ok: true,
       markdown: prToMarkdown({
         pr,
+        commits: includeCommit ? finalCommits : undefined,
+        files: includeFiles ? files : undefined,
         issueComments: selectedIssueComments,
         reviewComments: selectedReviewComments,
         reviews: selectedReviews,
         historicalMode: true,
         includeFiles,
+        includeCommit,
       }),
       warning: sliceResult.warning,
     };
@@ -187,11 +243,14 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
     ok: true,
     markdown: prToMarkdown({
       pr,
+      commits: includeCommit ? finalCommits : undefined,
+      files: includeFiles ? files : undefined,
       issueComments,
       reviewComments,
       reviews,
       historicalMode,
       includeFiles,
+      includeCommit,
     }),
   };
 }
@@ -207,6 +266,10 @@ interface UpdateSettingsMessage {
     enabled?: boolean;
     theme?: 'light' | 'dark' | 'system';
     notifications?: boolean;
+    historicalMode?: boolean;
+    includeFileDiff?: boolean;
+    includeCommit?: boolean;
+    smartDiffMode?: boolean;
   };
 }
 

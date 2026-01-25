@@ -27,8 +27,12 @@ let isCopying = false;
 // Temporary export settings (overrides for current copy operation)
 let tempHistoricalMode: boolean | null = null;
 let tempIncludeFileDiff: boolean | null = null;
+let tempIncludeCommit: boolean | null = null;
+let tempSmartDiffMode: boolean | null = null;
 let defaultHistoricalMode = true;
 let defaultIncludeFileDiff = false;
+let defaultIncludeCommit = false;
+let defaultSmartDiffMode = false;
 
 // Observer state for throttling and cleanup
 let pageObserver: MutationObserver | null = null;
@@ -168,10 +172,10 @@ function ensureStyles(): void {
       min-width: 200px;
       margin-top: 4px;
       padding: 8px 0;
-      border: 1px solid var(--color-border-default, rgba(27, 31, 36, 0.15));
+      border: 1px solid var(--borderColor-default, var(--color-border-default, rgba(27, 31, 36, 0.15)));
       border-radius: 6px;
-      background: var(--color-canvas-overlay, #fff);
-      box-shadow: 0 8px 24px rgba(140, 149, 159, 0.2);
+      background: var(--overlay-bgColor, var(--color-canvas-overlay, var(--color-canvas-default, #fff)));
+      box-shadow: var(--shadow-floating-small, var(--color-shadow-medium, 0 8px 24px rgba(140, 149, 159, 0.2)));
     }
 
     .context-tools-dropdown[hidden] {
@@ -182,7 +186,7 @@ function ensureStyles(): void {
       padding: 4px 12px 8px;
       font-size: 11px;
       font-weight: 600;
-      color: var(--color-fg-muted, #57606a);
+      color: var(--fgColor-muted, var(--color-fg-muted, #57606a));
       text-transform: uppercase;
     }
 
@@ -192,12 +196,12 @@ function ensureStyles(): void {
       justify-content: space-between;
       padding: 6px 12px;
       font-size: 12px;
-      color: var(--color-fg-default, #1f2328);
+      color: var(--fgColor-default, var(--color-fg-default, #1f2328));
       cursor: pointer;
     }
 
     .context-tools-dropdown-item:hover {
-      background: var(--color-action-list-item-default-hover-bg, rgba(208, 215, 222, 0.32));
+      background: var(--bgColor-neutral-muted, var(--color-action-list-item-default-hover-bg, rgba(208, 215, 222, 0.32)));
     }
 
     .context-tools-dropdown-item input[type="checkbox"] {
@@ -213,7 +217,7 @@ function ensureStyles(): void {
     }
 
     .context-tools-dropdown-action:disabled {
-      color: var(--color-fg-muted, #6e7781);
+      color: var(--fgColor-muted, var(--color-fg-muted, #6e7781));
       cursor: default;
     }
 
@@ -224,7 +228,7 @@ function ensureStyles(): void {
     .context-tools-dropdown-divider {
       height: 1px;
       margin: 6px 0;
-      background: var(--color-border-muted, rgba(27, 31, 36, 0.08));
+      background: var(--borderColor-muted, var(--color-border-muted, rgba(27, 31, 36, 0.08)));
     }
 
     .context-tools-marker-start,
@@ -350,15 +354,29 @@ async function handleCopyClick(): Promise<void> {
   // Use temporary overrides if set, otherwise use defaults
   const historicalMode = tempHistoricalMode ?? defaultHistoricalMode;
   const includeFiles = tempIncludeFileDiff ?? defaultIncludeFileDiff;
+  const includeCommit = tempIncludeCommit ?? defaultIncludeCommit;
+  const smartDiffMode = tempSmartDiffMode ?? defaultSmartDiffMode;
 
   try {
-    const result = await adapters.messaging.sendMessage<{ type: string; payload: { page: PageRef; range?: MarkerRange; historicalMode?: boolean; includeFiles?: boolean } }, GenerateMarkdownResult>({
+    const result = await adapters.messaging.sendMessage<{
+      type: string;
+      payload: {
+        page: PageRef;
+        range?: MarkerRange;
+        historicalMode?: boolean;
+        includeFiles?: boolean;
+        includeCommit?: boolean;
+        smartDiffMode?: boolean;
+      };
+    }, GenerateMarkdownResult>({
       type: 'GENERATE_MARKDOWN',
       payload: {
         page: currentPage,
         range: markerRange,
         historicalMode,
         includeFiles,
+        includeCommit,
+        smartDiffMode,
       },
     });
 
@@ -417,6 +435,32 @@ function createSettingsDropdown(): HTMLDivElement {
     tempIncludeFileDiff = fileDiffCheckbox.checked;
   });
   dropdown.appendChild(fileDiffItem);
+
+  // Include commit diff toggle
+  const commitDiffItem = document.createElement('label');
+  commitDiffItem.className = 'context-tools-dropdown-item';
+  commitDiffItem.innerHTML = `
+    <span>Include commit diffs</span>
+    <input type="checkbox" id="context-tools-commit-diff" ${(tempIncludeCommit ?? defaultIncludeCommit) ? 'checked' : ''}>
+  `;
+  const commitDiffCheckbox = commitDiffItem.querySelector('input') as HTMLInputElement;
+  commitDiffCheckbox.addEventListener('change', () => {
+    tempIncludeCommit = commitDiffCheckbox.checked;
+  });
+  dropdown.appendChild(commitDiffItem);
+
+  // Smart diff mode toggle
+  const smartDiffItem = document.createElement('label');
+  smartDiffItem.className = 'context-tools-dropdown-item';
+  smartDiffItem.innerHTML = `
+    <span>Smart diff mode</span>
+    <input type="checkbox" id="context-tools-smart-diff" ${(tempSmartDiffMode ?? defaultSmartDiffMode) ? 'checked' : ''}>
+  `;
+  const smartDiffCheckbox = smartDiffItem.querySelector('input') as HTMLInputElement;
+  smartDiffCheckbox.addEventListener('change', () => {
+    tempSmartDiffMode = smartDiffCheckbox.checked;
+  });
+  dropdown.appendChild(smartDiffItem);
 
   const divider = document.createElement('div');
   divider.className = 'context-tools-dropdown-divider';
@@ -760,6 +804,8 @@ async function init(): Promise<void> {
     // Load markdown export defaults from settings
     defaultHistoricalMode = settings?.historicalMode ?? true;
     defaultIncludeFileDiff = settings?.includeFileDiff ?? false;
+    defaultIncludeCommit = settings?.includeCommit ?? false;
+    defaultSmartDiffMode = settings?.smartDiffMode ?? false;
   } catch {
     // Default to enabled if settings are unavailable.
   }

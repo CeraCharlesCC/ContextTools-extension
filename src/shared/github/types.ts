@@ -24,6 +24,8 @@ export interface GenerateMarkdownPayload {
   range?: MarkerRange;
   historicalMode?: boolean;
   includeFiles?: boolean;
+  includeCommit?: boolean;
+  smartDiffMode?: boolean;
 }
 
 export interface GenerateMarkdownResponse {

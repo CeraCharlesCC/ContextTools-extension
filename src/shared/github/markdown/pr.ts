@@ -48,6 +48,25 @@ function commitBody(message: string): string {
   return body;
 }
 
+function renderCommitEntry(lines: string[], commit: any, index: number, date: string | undefined, options: { heading: string; diffHeading: string; includeFiles?: boolean }): void {
+  const sha = commit?.sha ? commit.sha.slice(0, 7) : 'unknown';
+  const message = commit?.commit?.message || '';
+  const subject = commitSubject(message);
+  const body = commitBody(message);
+  lines.push('');
+  lines.push(`${options.heading} ${index + 1}. Commit ${sha} - ${subject}`);
+  lines.push(`Author: ${formatCommitAuthor(commit)} on ${formatDate(date)}`);
+  if (body) {
+    lines.push(body);
+  }
+  if (options.includeFiles && commit?.files?.length) {
+    commit.files.forEach((file: any) => {
+      lines.push('');
+      renderFileDiff(lines, file, options.diffHeading);
+    });
+  }
+}
+
 function normalizeEvents(events: TimelineEvent[]): Array<TimelineEvent & { index: number }> {
   const indexedEvents = events.map((event, index) => ({ ...event, index }));
   indexedEvents.sort((a, b) => {
@@ -99,7 +118,7 @@ export function buildTimelineEvents(input: {
 export function renderTimelineSection(
   lines: string[],
   events: TimelineEvent[],
-  options?: { includeFiles?: boolean; heading?: string }
+  options?: { includeCommitFiles?: boolean; heading?: string }
 ): void {
   const normalized = normalizeEvents(events);
   if (!normalized.length) return;
@@ -110,23 +129,11 @@ export function renderTimelineSection(
 
   normalized.forEach((event, index) => {
     if (event.type === 'commit') {
-      const commit = event.commit;
-      const sha = commit?.sha ? commit.sha.slice(0, 7) : 'unknown';
-      const message = commit?.commit?.message || '';
-      const subject = commitSubject(message);
-      const body = commitBody(message);
-      lines.push('');
-      lines.push(`### ${index + 1}. Commit ${sha} - ${subject}`);
-      lines.push(`Author: ${formatCommitAuthor(commit)} on ${formatDate(event.date)}`);
-      if (body) {
-        lines.push(body);
-      }
-      if (options?.includeFiles && commit?.files?.length) {
-        commit.files.forEach((file: any) => {
-          lines.push('');
-          renderFileDiff(lines, file, '####');
-        });
-      }
+      renderCommitEntry(lines, event.commit, index, event.date, {
+        heading: '###',
+        diffHeading: '####',
+        includeFiles: options?.includeCommitFiles,
+      });
       return;
     }
 
@@ -177,6 +184,7 @@ export function prToMarkdown(input: {
   commits?: any[];
   historicalMode?: boolean;
   includeFiles?: boolean;
+  includeCommit?: boolean;
 }): string {
   const lines: string[] = [];
   const state = input.pr.merged ? 'merged' : input.pr.state;
@@ -213,12 +221,12 @@ export function prToMarkdown(input: {
 
   if (input.historicalMode) {
     const events = buildTimelineEvents({
-      commits: input.commits,
+      commits: input.includeCommit ? input.commits : undefined,
       issueComments: input.issueComments,
       reviewComments: input.reviewComments,
       reviews: input.reviews,
     });
-    renderTimelineSection(lines, events, { includeFiles: input.includeFiles });
+    renderTimelineSection(lines, events, { includeCommitFiles: input.includeCommit });
   } else {
     if (input.files?.length) {
       lines.push('');
@@ -226,6 +234,19 @@ export function prToMarkdown(input: {
       input.files.forEach((file) => {
         lines.push('');
         renderFileDiff(lines, file, '###');
+      });
+    }
+
+    if (input.includeCommit && input.commits?.length) {
+      lines.push('');
+      lines.push(`## Commits (${input.commits.length})`);
+      input.commits.forEach((commit, index) => {
+        const date = commit?.commit?.author?.date || commit?.commit?.committer?.date;
+        renderCommitEntry(lines, commit, index, date, {
+          heading: '###',
+          diffHeading: '####',
+          includeFiles: true,
+        });
       });
     }
 
