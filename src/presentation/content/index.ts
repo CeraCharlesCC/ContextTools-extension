@@ -527,6 +527,13 @@ function createCopyButtonGroup(): HTMLDivElement {
 }
 
 function findIssueAnchorButton(): HTMLElement | null {
+  const actionsContainer = document.querySelector(
+    '[data-component="PH_Actions"] [class*="HeaderMenu-module__menuActionsContainer"]',
+  );
+  if (actionsContainer?.firstElementChild) {
+    return actionsContainer.firstElementChild as HTMLElement;
+  }
+
   const header =
     document.querySelector('#partial-discussion-header') ??
     document.querySelector('.gh-header');
