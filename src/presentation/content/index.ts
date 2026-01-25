@@ -19,6 +19,7 @@ let currentPath = window.location.pathname;
 let markerRange: MarkerRange = {};
 let copyButton: HTMLButtonElement | null = null;
 let settingsDropdown: HTMLDivElement | null = null;
+let resetMarkersButton: HTMLButtonElement | null = null;
 let lastMarkerCandidate: Marker | null = null;
 let isEnabled = true;
 let isCopying = false;
@@ -64,17 +65,21 @@ function ensureStyles(): void {
       gap: 6px;
       padding: 3px 10px;
       margin-right: 6px;
-      border: 1px solid var(--color-btn-border, rgba(27, 31, 36, 0.15));
+      border: 1px solid var(--button-default-borderColor-rest, var(--color-btn-border, rgba(27, 31, 36, 0.15)));
       border-radius: 6px;
-      background: var(--color-btn-bg, #f6f8fa);
-      color: var(--color-fg-default, #1f2328);
+      background: var(--button-default-bgColor-rest, var(--color-btn-bg, #f6f8fa));
+      color: var(--button-default-fgColor-rest, var(--color-fg-default, #1f2328));
       font-size: 12px;
       font-weight: 500;
       cursor: pointer;
     }
 
     .context-tools-copy-button:hover {
-      background: var(--color-btn-hover-bg, #f3f4f6);
+      background: var(--button-default-bgColor-hover, var(--color-btn-hover-bg, #f3f4f6));
+    }
+
+    .context-tools-copy-button:active {
+      background: var(--button-default-bgColor-active, var(--color-btn-active-bg, #ebecf0));
     }
 
     .context-tools-copy-button:disabled {
@@ -135,15 +140,19 @@ function ensureStyles(): void {
       align-items: center;
       justify-content: center;
       padding: 3px 6px;
-      border: 1px solid var(--color-btn-border, rgba(27, 31, 36, 0.15));
+      border: 1px solid var(--button-default-borderColor-rest, var(--color-btn-border, rgba(27, 31, 36, 0.15)));
       border-radius: 0 6px 6px 0;
-      background: var(--color-btn-bg, #f6f8fa);
-      color: var(--color-fg-default, #1f2328);
+      background: var(--button-default-bgColor-rest, var(--color-btn-bg, #f6f8fa));
+      color: var(--button-default-fgColor-rest, var(--color-fg-default, #1f2328));
       cursor: pointer;
     }
 
     .context-tools-dropdown-trigger:hover {
-      background: var(--color-btn-hover-bg, #f3f4f6);
+      background: var(--button-default-bgColor-hover, var(--color-btn-hover-bg, #f3f4f6));
+    }
+
+    .context-tools-dropdown-trigger:active {
+      background: var(--button-default-bgColor-active, var(--color-btn-active-bg, #ebecf0));
     }
 
     .context-tools-dropdown-trigger svg {
@@ -194,6 +203,44 @@ function ensureStyles(): void {
     .context-tools-dropdown-item input[type="checkbox"] {
       margin-left: 8px;
     }
+
+    .context-tools-dropdown-action {
+      width: 100%;
+      border: none;
+      background: none;
+      text-align: left;
+      font: inherit;
+    }
+
+    .context-tools-dropdown-action:disabled {
+      color: var(--color-fg-muted, #6e7781);
+      cursor: default;
+    }
+
+    .context-tools-dropdown-action:disabled:hover {
+      background: none;
+    }
+
+    .context-tools-dropdown-divider {
+      height: 1px;
+      margin: 6px 0;
+      background: var(--color-border-muted, rgba(27, 31, 36, 0.08));
+    }
+
+    .context-tools-marker-start,
+    .context-tools-marker-end {
+      outline: 2px solid transparent;
+      outline-offset: 2px;
+      border-radius: 6px;
+    }
+
+    .context-tools-marker-start {
+      outline-color: var(--color-success-emphasis, #1a7f37);
+    }
+
+    .context-tools-marker-end {
+      outline-color: var(--color-attention-emphasis, #bf8700);
+    }
   `;
   document.head.appendChild(style);
 }
@@ -218,12 +265,18 @@ function showToast(message: string, tone: 'info' | 'error' | 'warning' = 'info')
 }
 
 function updateCopyButtonState(): void {
-  if (!copyButton) return;
-  const label = copyButton.querySelector('.context-tools-label') as HTMLElement | null;
-  const indicator = copyButton.querySelector('.context-tools-range-indicator') as HTMLElement | null;
   const hasStart = Boolean(markerRange.start);
   const hasEnd = Boolean(markerRange.end);
   const hasRange = hasStart || hasEnd;
+
+  updateMarkerHighlights();
+  if (resetMarkersButton) {
+    resetMarkersButton.disabled = !hasRange;
+  }
+  if (!copyButton) return;
+
+  const label = copyButton.querySelector('.context-tools-label') as HTMLElement | null;
+  const indicator = copyButton.querySelector('.context-tools-range-indicator') as HTMLElement | null;
 
   if (label) {
     label.textContent = hasRange ? 'Copy Range as Markdown' : 'Copy as Markdown';
@@ -239,6 +292,52 @@ function updateCopyButtonState(): void {
       indicator.hidden = true;
     }
   }
+}
+
+function markerToDomId(marker: Marker): string | null {
+  switch (marker.type) {
+    case 'issue-comment':
+      return `issuecomment-${marker.id}`;
+    case 'review-comment':
+      return `discussion_r${marker.id}`;
+    case 'review':
+      return `pullrequestreview-${marker.id}`;
+    default:
+      return null;
+  }
+}
+
+function resolveMarkerElement(marker: Marker): HTMLElement | null {
+  const domId = markerToDomId(marker);
+  if (!domId) return null;
+  const element = document.getElementById(domId);
+  if (!element) return null;
+  return (
+    element.closest<HTMLElement>(
+      '.js-comment-container, .js-comment, .timeline-comment, .review-comment, .js-resolvable-thread, .js-review-comment',
+    ) ?? (element as HTMLElement)
+  );
+}
+
+function updateMarkerHighlights(): void {
+  document.querySelectorAll('.context-tools-marker-start, .context-tools-marker-end').forEach((el) => {
+    el.classList.remove('context-tools-marker-start', 'context-tools-marker-end');
+  });
+
+  if (markerRange.start) {
+    const target = resolveMarkerElement(markerRange.start);
+    target?.classList.add('context-tools-marker-start');
+  }
+  if (markerRange.end) {
+    const target = resolveMarkerElement(markerRange.end);
+    target?.classList.add('context-tools-marker-end');
+  }
+}
+
+function resetMarkerRange(): void {
+  markerRange = {};
+  updateCopyButtonState();
+  showToast('Markers cleared.');
 }
 
 async function handleCopyClick(): Promise<void> {
@@ -319,6 +418,21 @@ function createSettingsDropdown(): HTMLDivElement {
     tempIncludeFileDiff = fileDiffCheckbox.checked;
   });
   dropdown.appendChild(fileDiffItem);
+
+  const divider = document.createElement('div');
+  divider.className = 'context-tools-dropdown-divider';
+  dropdown.appendChild(divider);
+
+  const resetItem = document.createElement('button');
+  resetItem.type = 'button';
+  resetItem.className = 'context-tools-dropdown-item context-tools-dropdown-action';
+  resetItem.textContent = 'Reset markers';
+  resetItem.addEventListener('click', () => {
+    resetMarkerRange();
+    dropdown.hidden = true;
+  });
+  resetMarkersButton = resetItem;
+  dropdown.appendChild(resetItem);
 
   return dropdown;
 }
@@ -614,8 +728,11 @@ function handlePageChange(): void {
 
   currentPage = parsePageRef(window.location.pathname);
   markerRange = {};
+  updateMarkerHighlights();
   lastMarkerCandidate = null;
   copyButtonInjected = false;
+  settingsDropdown = null;
+  resetMarkersButton = null;
 
   if (!currentPage) {
     const existing = document.querySelector(COPY_BUTTON_SELECTOR);
