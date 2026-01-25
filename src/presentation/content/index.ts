@@ -229,17 +229,16 @@ function ensureStyles(): void {
 
     .context-tools-marker-start,
     .context-tools-marker-end {
-      outline: 2px solid transparent;
-      outline-offset: 2px;
+      box-shadow: 0 0 0 2px transparent;
       border-radius: 6px;
     }
 
     .context-tools-marker-start {
-      outline-color: var(--color-success-emphasis, #1a7f37);
+      box-shadow: 0 0 0 2px var(--color-success-emphasis, #1a7f37);
     }
 
     .context-tools-marker-end {
-      outline-color: var(--color-attention-emphasis, #bf8700);
+      box-shadow: 0 0 0 2px var(--color-attention-emphasis, #bf8700);
     }
   `;
   document.head.appendChild(style);
@@ -314,7 +313,7 @@ function resolveMarkerElement(marker: Marker): HTMLElement | null {
   if (!element) return null;
   return (
     element.closest<HTMLElement>(
-      '.js-comment-container, .js-comment, .timeline-comment, .review-comment, .js-resolvable-thread, .js-review-comment',
+      '.timeline-comment, .timeline-comment-group, .js-comment-container, .js-comment, .review-comment, .js-resolvable-thread, .js-review-comment',
     ) ?? (element as HTMLElement)
   );
 }
