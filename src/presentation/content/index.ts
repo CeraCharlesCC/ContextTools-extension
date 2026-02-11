@@ -29,10 +29,14 @@ let tempHistoricalMode: boolean | null = null;
 let tempIncludeFileDiff: boolean | null = null;
 let tempIncludeCommit: boolean | null = null;
 let tempSmartDiffMode: boolean | null = null;
+let tempOnlyReviewComments: boolean | null = null;
+let tempIgnoreResolvedComments: boolean | null = null;
 let defaultHistoricalMode = true;
 let defaultIncludeFileDiff = false;
 let defaultIncludeCommit = false;
 let defaultSmartDiffMode = false;
+let defaultOnlyReviewComments = false;
+let defaultIgnoreResolvedComments = false;
 
 // Observer state for throttling and cleanup
 let pageObserver: MutationObserver | null = null;
@@ -356,6 +360,8 @@ async function handleCopyClick(): Promise<void> {
   const includeFiles = tempIncludeFileDiff ?? defaultIncludeFileDiff;
   const includeCommit = tempIncludeCommit ?? defaultIncludeCommit;
   const smartDiffMode = tempSmartDiffMode ?? defaultSmartDiffMode;
+  const onlyReviewComments = tempOnlyReviewComments ?? defaultOnlyReviewComments;
+  const ignoreResolvedComments = tempIgnoreResolvedComments ?? defaultIgnoreResolvedComments;
 
   try {
     const result = await adapters.messaging.sendMessage<{
@@ -367,6 +373,8 @@ async function handleCopyClick(): Promise<void> {
         includeFiles?: boolean;
         includeCommit?: boolean;
         smartDiffMode?: boolean;
+        onlyReviewComments?: boolean;
+        ignoreResolvedComments?: boolean;
       };
     }, GenerateMarkdownResult>({
       type: 'GENERATE_MARKDOWN',
@@ -377,6 +385,8 @@ async function handleCopyClick(): Promise<void> {
         includeFiles,
         includeCommit,
         smartDiffMode,
+        onlyReviewComments,
+        ignoreResolvedComments,
       },
     });
 
@@ -404,6 +414,7 @@ function createSettingsDropdown(): HTMLDivElement {
   const dropdown = document.createElement('div');
   dropdown.className = 'context-tools-dropdown';
   dropdown.hidden = true;
+  const isPullPage = currentPage?.kind === 'pull';
 
   const header = document.createElement('div');
   header.className = 'context-tools-dropdown-header';
@@ -461,6 +472,32 @@ function createSettingsDropdown(): HTMLDivElement {
     tempSmartDiffMode = smartDiffCheckbox.checked;
   });
   dropdown.appendChild(smartDiffItem);
+
+  // Only review comments mode toggle
+  const onlyReviewCommentsItem = document.createElement('label');
+  onlyReviewCommentsItem.className = 'context-tools-dropdown-item';
+  onlyReviewCommentsItem.innerHTML = `
+    <span>Only review comments (PR only)</span>
+    <input type="checkbox" id="context-tools-only-review-comments" ${(tempOnlyReviewComments ?? defaultOnlyReviewComments) ? 'checked' : ''} ${isPullPage ? '' : 'disabled'}>
+  `;
+  const onlyReviewCommentsCheckbox = onlyReviewCommentsItem.querySelector('input') as HTMLInputElement;
+  onlyReviewCommentsCheckbox.addEventListener('change', () => {
+    tempOnlyReviewComments = onlyReviewCommentsCheckbox.checked;
+  });
+  dropdown.appendChild(onlyReviewCommentsItem);
+
+  // Ignore resolved comments mode toggle
+  const ignoreResolvedCommentsItem = document.createElement('label');
+  ignoreResolvedCommentsItem.className = 'context-tools-dropdown-item';
+  ignoreResolvedCommentsItem.innerHTML = `
+    <span>Ignore resolved comments (PR only)</span>
+    <input type="checkbox" id="context-tools-ignore-resolved-comments" ${(tempIgnoreResolvedComments ?? defaultIgnoreResolvedComments) ? 'checked' : ''} ${isPullPage ? '' : 'disabled'}>
+  `;
+  const ignoreResolvedCommentsCheckbox = ignoreResolvedCommentsItem.querySelector('input') as HTMLInputElement;
+  ignoreResolvedCommentsCheckbox.addEventListener('change', () => {
+    tempIgnoreResolvedComments = ignoreResolvedCommentsCheckbox.checked;
+  });
+  dropdown.appendChild(ignoreResolvedCommentsItem);
 
   const divider = document.createElement('div');
   divider.className = 'context-tools-dropdown-divider';
@@ -858,6 +895,8 @@ async function init(): Promise<void> {
     defaultIncludeFileDiff = settings?.includeFileDiff ?? false;
     defaultIncludeCommit = settings?.includeCommit ?? false;
     defaultSmartDiffMode = settings?.smartDiffMode ?? false;
+    defaultOnlyReviewComments = settings?.onlyReviewComments ?? false;
+    defaultIgnoreResolvedComments = settings?.ignoreResolvedComments ?? false;
   } catch {
     // Default to enabled if settings are unavailable.
   }

@@ -26,6 +26,8 @@ export interface GenerateMarkdownPayload {
   includeFiles?: boolean;
   includeCommit?: boolean;
   smartDiffMode?: boolean;
+  onlyReviewComments?: boolean;
+  ignoreResolvedComments?: boolean;
 }
 
 export interface GenerateMarkdownResponse {
