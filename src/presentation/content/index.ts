@@ -476,27 +476,33 @@ function createSettingsDropdown(): HTMLDivElement {
   // Only review comments mode toggle
   const onlyReviewCommentsItem = document.createElement('label');
   onlyReviewCommentsItem.className = 'context-tools-dropdown-item';
-  onlyReviewCommentsItem.innerHTML = `
-    <span>Only review comments (PR only)</span>
-    <input type="checkbox" id="context-tools-only-review-comments" ${(tempOnlyReviewComments ?? defaultOnlyReviewComments) ? 'checked' : ''} ${isPullPage ? '' : 'disabled'}>
-  `;
-  const onlyReviewCommentsCheckbox = onlyReviewCommentsItem.querySelector('input') as HTMLInputElement;
+  const onlyReviewCommentsSpan = document.createElement('span');
+  onlyReviewCommentsSpan.textContent = 'Only review comments (PR only)';
+  const onlyReviewCommentsCheckbox = document.createElement('input');
+  onlyReviewCommentsCheckbox.type = 'checkbox';
+  onlyReviewCommentsCheckbox.id = 'context-tools-only-review-comments';
+  onlyReviewCommentsCheckbox.checked = tempOnlyReviewComments ?? defaultOnlyReviewComments;
+  onlyReviewCommentsCheckbox.disabled = !isPullPage;
   onlyReviewCommentsCheckbox.addEventListener('change', () => {
     tempOnlyReviewComments = onlyReviewCommentsCheckbox.checked;
   });
+  onlyReviewCommentsItem.append(onlyReviewCommentsSpan, onlyReviewCommentsCheckbox);
   dropdown.appendChild(onlyReviewCommentsItem);
 
   // Ignore resolved comments mode toggle
   const ignoreResolvedCommentsItem = document.createElement('label');
   ignoreResolvedCommentsItem.className = 'context-tools-dropdown-item';
-  ignoreResolvedCommentsItem.innerHTML = `
-    <span>Ignore resolved comments (PR only)</span>
-    <input type="checkbox" id="context-tools-ignore-resolved-comments" ${(tempIgnoreResolvedComments ?? defaultIgnoreResolvedComments) ? 'checked' : ''} ${isPullPage ? '' : 'disabled'}>
-  `;
-  const ignoreResolvedCommentsCheckbox = ignoreResolvedCommentsItem.querySelector('input') as HTMLInputElement;
+  const ignoreResolvedCommentsSpan = document.createElement('span');
+  ignoreResolvedCommentsSpan.textContent = 'Ignore resolved comments (PR only)';
+  const ignoreResolvedCommentsCheckbox = document.createElement('input');
+  ignoreResolvedCommentsCheckbox.type = 'checkbox';
+  ignoreResolvedCommentsCheckbox.id = 'context-tools-ignore-resolved-comments';
+  ignoreResolvedCommentsCheckbox.checked = tempIgnoreResolvedComments ?? defaultIgnoreResolvedComments;
+  ignoreResolvedCommentsCheckbox.disabled = !isPullPage;
   ignoreResolvedCommentsCheckbox.addEventListener('change', () => {
     tempIgnoreResolvedComments = ignoreResolvedCommentsCheckbox.checked;
   });
+  ignoreResolvedCommentsItem.append(ignoreResolvedCommentsSpan, ignoreResolvedCommentsCheckbox);
   dropdown.appendChild(ignoreResolvedCommentsItem);
 
   const divider = document.createElement('div');
