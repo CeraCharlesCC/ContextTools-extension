@@ -1,0 +1,181 @@
+.context-tools-copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  margin-right: 6px;
+  border: 1px solid var(--button-default-borderColor-rest, var(--color-btn-border, rgba(27, 31, 36, 0.15)));
+  border-radius: 6px;
+  background: var(--button-default-bgColor-rest, var(--color-btn-bg, #f6f8fa));
+  color: var(--button-default-fgColor-rest, var(--color-fg-default, #1f2328));
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.context-tools-copy-button:hover {
+  background: var(--button-default-bgColor-hover, var(--color-btn-hover-bg, #f3f4f6));
+}
+
+.context-tools-copy-button:active {
+  background: var(--button-default-bgColor-active, var(--color-btn-active-bg, #ebecf0));
+}
+
+.context-tools-copy-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.context-tools-range-indicator {
+  font-size: 11px;
+  color: var(--color-fg-muted, #57606a);
+}
+
+.context-tools-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483647;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(17, 24, 39, 0.9);
+  color: #fff;
+  font-size: 12px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+
+.context-tools-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.context-tools-toast.is-error {
+  background: rgba(185, 28, 28, 0.92);
+}
+
+.context-tools-toast.is-warning {
+  background: rgba(161, 98, 7, 0.92);
+}
+
+.context-tools-button-group {
+  display: inline-flex;
+  align-items: stretch;
+  margin-right: 6px;
+  border-radius: 6px;
+  overflow: visible;
+}
+
+.context-tools-button-group .context-tools-copy-button {
+  margin-right: 0;
+  border-radius: 6px 0 0 6px;
+  border-right: none;
+}
+
+.context-tools-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 6px;
+  border: 1px solid var(--button-default-borderColor-rest, var(--color-btn-border, rgba(27, 31, 36, 0.15)));
+  border-radius: 0 6px 6px 0;
+  background: var(--button-default-bgColor-rest, var(--color-btn-bg, #f6f8fa));
+  color: var(--button-default-fgColor-rest, var(--color-fg-default, #1f2328));
+  cursor: pointer;
+}
+
+.context-tools-dropdown-trigger:hover {
+  background: var(--button-default-bgColor-hover, var(--color-btn-hover-bg, #f3f4f6));
+}
+
+.context-tools-dropdown-trigger:active {
+  background: var(--button-default-bgColor-active, var(--color-btn-active-bg, #ebecf0));
+}
+
+.context-tools-dropdown-trigger svg {
+  width: 12px;
+  height: 12px;
+}
+
+.context-tools-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  min-width: 200px;
+  margin-top: 4px;
+  padding: 8px 0;
+  border: 1px solid var(--borderColor-default, var(--color-border-default, rgba(27, 31, 36, 0.15)));
+  border-radius: 6px;
+  background: var(--overlay-bgColor, var(--color-canvas-overlay, var(--color-canvas-default, #fff)));
+  box-shadow: var(--shadow-floating-small, var(--color-shadow-medium, 0 8px 24px rgba(140, 149, 159, 0.2)));
+}
+
+.context-tools-dropdown[hidden] {
+  display: none;
+}
+
+.context-tools-dropdown-header {
+  padding: 4px 12px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fgColor-muted, var(--color-fg-muted, #57606a));
+  text-transform: uppercase;
+}
+
+.context-tools-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--fgColor-default, var(--color-fg-default, #1f2328));
+  cursor: pointer;
+}
+
+.context-tools-dropdown-item:hover {
+  background: var(--bgColor-neutral-muted, var(--color-action-list-item-default-hover-bg, rgba(208, 215, 222, 0.32)));
+}
+
+.context-tools-dropdown-item input[type="checkbox"] {
+  margin-left: 8px;
+}
+
+.context-tools-dropdown-action {
+  width: 100%;
+  border: none;
+  background: none;
+  text-align: left;
+  font: inherit;
+}
+
+.context-tools-dropdown-action:disabled {
+  color: var(--fgColor-muted, var(--color-fg-muted, #6e7781));
+  cursor: default;
+}
+
+.context-tools-dropdown-action:disabled:hover {
+  background: none;
+}
+
+.context-tools-dropdown-divider {
+  height: 1px;
+  margin: 6px 0;
+  background: var(--borderColor-muted, var(--color-border-muted, rgba(27, 31, 36, 0.08)));
+}
+
+.context-tools-marker-start,
+.context-tools-marker-end {
+  box-shadow: 0 0 0 2px transparent;
+  border-radius: 6px;
+}
+
+.context-tools-marker-start {
+  box-shadow: 0 0 0 2px var(--color-success-emphasis, #1a7f37);
+}
+
+.context-tools-marker-end {
+  box-shadow: 0 0 0 2px var(--color-attention-emphasis, #bf8700);
+}

@@ -175,6 +175,23 @@ export function renderTimelineSection(
   });
 }
 
+function renderReviewCommentsSection(lines: string[], reviewComments?: any[]): void {
+  if (!reviewComments?.length) return;
+  lines.push('');
+  lines.push(`## Review Comments (${reviewComments.length})`);
+  reviewComments.forEach((comment, index) => {
+    const location = comment.path ? ` - ${comment.path}${comment.line ? `:${comment.line}` : ''}` : '';
+    lines.push('');
+    lines.push(`### ${index + 1}. ${formatUser(comment.user)} on ${formatDate(comment.created_at)}${location}`);
+    renderBody(lines, comment.body, '_No comment body._');
+    if (comment.diff_hunk) {
+      lines.push('```diff');
+      lines.push(comment.diff_hunk);
+      lines.push('```');
+    }
+  });
+}
+
 export function prToMarkdown(input: {
   pr: any;
   files?: any[];
@@ -185,6 +202,7 @@ export function prToMarkdown(input: {
   historicalMode?: boolean;
   includeFiles?: boolean;
   includeCommit?: boolean;
+  onlyReviewComments?: boolean;
 }): string {
   const lines: string[] = [];
   const state = input.pr.merged ? 'merged' : input.pr.state;
@@ -218,6 +236,11 @@ export function prToMarkdown(input: {
   lines.push('');
   lines.push('## Description');
   renderBody(lines, input.pr.body, '_No description provided._');
+
+  if (input.onlyReviewComments) {
+    renderReviewCommentsSection(lines, input.reviewComments);
+    return lines.join('\n');
+  }
 
   if (input.historicalMode) {
     const events = buildTimelineEvents({
@@ -260,21 +283,7 @@ export function prToMarkdown(input: {
       });
     }
 
-    if (input.reviewComments?.length) {
-      lines.push('');
-      lines.push(`## Review Comments (${input.reviewComments.length})`);
-      input.reviewComments.forEach((comment, index) => {
-        const location = comment.path ? ` - ${comment.path}${comment.line ? `:${comment.line}` : ''}` : '';
-        lines.push('');
-        lines.push(`### ${index + 1}. ${formatUser(comment.user)} on ${formatDate(comment.created_at)}${location}`);
-        renderBody(lines, comment.body, '_No comment body._');
-        if (comment.diff_hunk) {
-          lines.push('```diff');
-          lines.push(comment.diff_hunk);
-          lines.push('```');
-        }
-      });
-    }
+    renderReviewCommentsSection(lines, input.reviewComments);
 
     if (input.reviews?.length) {
       lines.push('');

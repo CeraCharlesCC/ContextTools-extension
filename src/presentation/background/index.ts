@@ -14,6 +14,7 @@ import {
   getPullFiles,
   getPullRequest,
   getPullReviewComments,
+  getPullReviewThreadResolution,
   getPullReviews,
   issueToMarkdown,
   prToMarkdown,
@@ -154,6 +155,42 @@ function applySmartDiffMode(commits: any[], files: any[]): any[] {
   });
 }
 
+function combineWarnings(...warnings: Array<string | undefined>): string | undefined {
+  const filtered = warnings.map((warning) => warning?.trim()).filter((warning): warning is string => Boolean(warning));
+  if (!filtered.length) return undefined;
+  return filtered.join(' ');
+}
+
+function filterResolvedReviewComments(reviewComments: any[], commentResolution: Map<number, boolean> | null): {
+  reviewComments: any[];
+  warning?: string;
+} {
+  if (!commentResolution) {
+    return { reviewComments };
+  }
+
+  let unknownResolutionCount = 0;
+  const filteredReviewComments = reviewComments.filter((comment) => {
+    const isResolved = commentResolution.get(comment.id);
+    if (isResolved === true) {
+      return false;
+    }
+    if (isResolved === undefined) {
+      unknownResolutionCount += 1;
+    }
+    return true;
+  });
+
+  if (!unknownResolutionCount) {
+    return { reviewComments: filteredReviewComments };
+  }
+
+  return {
+    reviewComments: filteredReviewComments,
+    warning: `${unknownResolutionCount} review comment(s) were kept because thread resolution state was unavailable.`,
+  };
+}
+
 async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<GenerateMarkdownResult> {
   const token = await getGitHubToken();
   const { owner, repo, number } = payload.page;
@@ -164,6 +201,11 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
   const includeFiles = payload.includeFiles ?? settings.includeFileDiff;
   const includeCommit = payload.includeCommit ?? settings.includeCommit;
   const smartDiffMode = payload.smartDiffMode ?? settings.smartDiffMode;
+  const onlyReviewComments = payload.onlyReviewComments ?? settings.onlyReviewComments;
+  const ignoreResolvedComments = payload.ignoreResolvedComments ?? settings.ignoreResolvedComments;
+
+  const effectiveIncludeFiles = onlyReviewComments ? false : includeFiles;
+  const effectiveIncludeCommit = onlyReviewComments ? false : includeCommit;
 
   if (payload.page.kind === 'issue') {
     const issue = await getIssue({ owner, repo, number, token });
@@ -186,8 +228,8 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
     getPullReviews({ owner, repo, number, token }),
   ]);
 
-  const shouldFetchFiles = includeFiles || (includeCommit && smartDiffMode);
-  const shouldFetchCommits = includeCommit;
+  const shouldFetchFiles = effectiveIncludeFiles || (effectiveIncludeCommit && smartDiffMode);
+  const shouldFetchCommits = effectiveIncludeCommit;
 
   const [files, commits] = await Promise.all([
     shouldFetchFiles ? getPullFiles({ owner, repo, number, token }) : Promise.resolve([]),
@@ -198,11 +240,28 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
     ? await getCommitDetailsList({ owner, repo, token, commits })
     : [];
 
-  const finalCommits = includeCommit && smartDiffMode ? applySmartDiffMode(detailedCommits, files) : detailedCommits;
+  const finalCommits = effectiveIncludeCommit && smartDiffMode ? applySmartDiffMode(detailedCommits, files) : detailedCommits;
+
+  let resolvedFilterWarning: string | undefined;
+  let reviewCommentResolution: Map<number, boolean> | null = null;
+  if (ignoreResolvedComments) {
+    try {
+      const resolution = await getPullReviewThreadResolution({ owner, repo, number, token });
+      reviewCommentResolution = resolution.commentResolution;
+      if (resolution.incomplete) {
+        resolvedFilterWarning =
+          'Resolved-thread filtering may be incomplete because some review threads exceeded comment pagination limits.';
+      }
+    } catch (error) {
+      console.warn('Failed to resolve review thread states:', error);
+      resolvedFilterWarning =
+        'Unable to determine resolved review threads; exported review comments without resolved filtering.';
+    }
+  }
 
   if (payload.range?.start || payload.range?.end) {
     const events = buildTimelineEvents({
-      commits: includeCommit ? finalCommits : undefined,
+      commits: effectiveIncludeCommit ? finalCommits : undefined,
       issueComments,
       reviewComments,
       reviews,
@@ -221,37 +280,43 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
     const selectedReviews = sliceResult.events
       .filter((event) => event.type === 'review')
       .map((event) => (event as Extract<TimelineEvent, { type: 'review' }>).review);
+    const resolvedFilterResult = filterResolvedReviewComments(selectedReviewComments, reviewCommentResolution);
 
     return {
       ok: true,
       markdown: prToMarkdown({
         pr,
-        commits: includeCommit ? finalCommits : undefined,
-        files: includeFiles ? files : undefined,
-        issueComments: selectedIssueComments,
-        reviewComments: selectedReviewComments,
-        reviews: selectedReviews,
-        historicalMode: true,
-        includeFiles,
-        includeCommit,
+        commits: effectiveIncludeCommit ? finalCommits : undefined,
+        files: effectiveIncludeFiles ? files : undefined,
+        issueComments: onlyReviewComments ? [] : selectedIssueComments,
+        reviewComments: resolvedFilterResult.reviewComments,
+        reviews: onlyReviewComments ? [] : selectedReviews,
+        historicalMode: onlyReviewComments ? false : true,
+        includeFiles: effectiveIncludeFiles,
+        includeCommit: effectiveIncludeCommit,
+        onlyReviewComments,
       }),
-      warning: sliceResult.warning,
+      warning: combineWarnings(sliceResult.warning, resolvedFilterWarning, resolvedFilterResult.warning),
     };
   }
+
+  const resolvedFilterResult = filterResolvedReviewComments(reviewComments, reviewCommentResolution);
 
   return {
     ok: true,
     markdown: prToMarkdown({
       pr,
-      commits: includeCommit ? finalCommits : undefined,
-      files: includeFiles ? files : undefined,
-      issueComments,
-      reviewComments,
-      reviews,
+      commits: effectiveIncludeCommit ? finalCommits : undefined,
+      files: effectiveIncludeFiles ? files : undefined,
+      issueComments: onlyReviewComments ? [] : issueComments,
+      reviewComments: resolvedFilterResult.reviewComments,
+      reviews: onlyReviewComments ? [] : reviews,
       historicalMode,
-      includeFiles,
-      includeCommit,
+      includeFiles: effectiveIncludeFiles,
+      includeCommit: effectiveIncludeCommit,
+      onlyReviewComments,
     }),
+    warning: combineWarnings(resolvedFilterWarning, resolvedFilterResult.warning),
   };
 }
 
@@ -270,6 +335,8 @@ interface UpdateSettingsMessage {
     includeFileDiff?: boolean;
     includeCommit?: boolean;
     smartDiffMode?: boolean;
+    onlyReviewComments?: boolean;
+    ignoreResolvedComments?: boolean;
   };
 }
 

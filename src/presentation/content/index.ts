@@ -6,6 +6,20 @@ import { getBrowserAdapters } from '@infrastructure/adapters';
 import { copyToClipboard, findMarkerInElement, parsePageRef } from '@shared/github';
 import type { GenerateMarkdownResult, Marker, MarkerRange, PageRef } from '@shared/github';
 import type { Settings } from '@domain/entities';
+import {
+  ensureStyles,
+  showToast,
+  updateMarkerHighlights,
+  updateCopyButtonLabel,
+  createCopyButtonGroup,
+  findIssueAnchorButton,
+  findPrAnchorButton,
+  closeMenu,
+  createMenuItem,
+  isCommentMenu,
+  findMenuItemTemplate,
+} from './dom';
+import type { DropdownOptions } from './dom';
 
 const adapters = getBrowserAdapters();
 
@@ -29,10 +43,14 @@ let tempHistoricalMode: boolean | null = null;
 let tempIncludeFileDiff: boolean | null = null;
 let tempIncludeCommit: boolean | null = null;
 let tempSmartDiffMode: boolean | null = null;
+let tempOnlyReviewComments: boolean | null = null;
+let tempIgnoreResolvedComments: boolean | null = null;
 let defaultHistoricalMode = true;
 let defaultIncludeFileDiff = false;
 let defaultIncludeCommit = false;
 let defaultSmartDiffMode = false;
+let defaultOnlyReviewComments = false;
+let defaultIgnoreResolvedComments = false;
 
 // Observer state for throttling and cleanup
 let pageObserver: MutationObserver | null = null;
@@ -58,283 +76,9 @@ adapters.messaging.addListener(async (message: { type: string; payload?: unknown
   }
 });
 
-function ensureStyles(): void {
-  if (document.getElementById('context-tools-style')) return;
-  const style = document.createElement('style');
-  style.id = 'context-tools-style';
-  style.textContent = `
-    .context-tools-copy-button {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 3px 10px;
-      margin-right: 6px;
-      border: 1px solid var(--button-default-borderColor-rest, var(--color-btn-border, rgba(27, 31, 36, 0.15)));
-      border-radius: 6px;
-      background: var(--button-default-bgColor-rest, var(--color-btn-bg, #f6f8fa));
-      color: var(--button-default-fgColor-rest, var(--color-fg-default, #1f2328));
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-    }
-
-    .context-tools-copy-button:hover {
-      background: var(--button-default-bgColor-hover, var(--color-btn-hover-bg, #f3f4f6));
-    }
-
-    .context-tools-copy-button:active {
-      background: var(--button-default-bgColor-active, var(--color-btn-active-bg, #ebecf0));
-    }
-
-    .context-tools-copy-button:disabled {
-      opacity: 0.6;
-      cursor: default;
-    }
-
-    .context-tools-range-indicator {
-      font-size: 11px;
-      color: var(--color-fg-muted, #57606a);
-    }
-
-    .context-tools-toast {
-      position: fixed;
-      right: 16px;
-      bottom: 16px;
-      z-index: 2147483647;
-      padding: 10px 14px;
-      border-radius: 8px;
-      background: rgba(17, 24, 39, 0.9);
-      color: #fff;
-      font-size: 12px;
-      opacity: 0;
-      transform: translateY(6px);
-      transition: opacity 0.2s ease, transform 0.2s ease;
-      pointer-events: none;
-    }
-
-    .context-tools-toast.is-visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .context-tools-toast.is-error {
-      background: rgba(185, 28, 28, 0.92);
-    }
-
-    .context-tools-toast.is-warning {
-      background: rgba(161, 98, 7, 0.92);
-    }
-
-    .context-tools-button-group {
-      display: inline-flex;
-      align-items: stretch;
-      margin-right: 6px;
-      border-radius: 6px;
-      overflow: visible;
-    }
-
-    .context-tools-button-group .context-tools-copy-button {
-      margin-right: 0;
-      border-radius: 6px 0 0 6px;
-      border-right: none;
-    }
-
-    .context-tools-dropdown-trigger {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 3px 6px;
-      border: 1px solid var(--button-default-borderColor-rest, var(--color-btn-border, rgba(27, 31, 36, 0.15)));
-      border-radius: 0 6px 6px 0;
-      background: var(--button-default-bgColor-rest, var(--color-btn-bg, #f6f8fa));
-      color: var(--button-default-fgColor-rest, var(--color-fg-default, #1f2328));
-      cursor: pointer;
-    }
-
-    .context-tools-dropdown-trigger:hover {
-      background: var(--button-default-bgColor-hover, var(--color-btn-hover-bg, #f3f4f6));
-    }
-
-    .context-tools-dropdown-trigger:active {
-      background: var(--button-default-bgColor-active, var(--color-btn-active-bg, #ebecf0));
-    }
-
-    .context-tools-dropdown-trigger svg {
-      width: 12px;
-      height: 12px;
-    }
-
-    .context-tools-dropdown {
-      position: absolute;
-      top: 100%;
-      right: 0;
-      z-index: 100;
-      min-width: 200px;
-      margin-top: 4px;
-      padding: 8px 0;
-      border: 1px solid var(--borderColor-default, var(--color-border-default, rgba(27, 31, 36, 0.15)));
-      border-radius: 6px;
-      background: var(--overlay-bgColor, var(--color-canvas-overlay, var(--color-canvas-default, #fff)));
-      box-shadow: var(--shadow-floating-small, var(--color-shadow-medium, 0 8px 24px rgba(140, 149, 159, 0.2)));
-    }
-
-    .context-tools-dropdown[hidden] {
-      display: none;
-    }
-
-    .context-tools-dropdown-header {
-      padding: 4px 12px 8px;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--fgColor-muted, var(--color-fg-muted, #57606a));
-      text-transform: uppercase;
-    }
-
-    .context-tools-dropdown-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 6px 12px;
-      font-size: 12px;
-      color: var(--fgColor-default, var(--color-fg-default, #1f2328));
-      cursor: pointer;
-    }
-
-    .context-tools-dropdown-item:hover {
-      background: var(--bgColor-neutral-muted, var(--color-action-list-item-default-hover-bg, rgba(208, 215, 222, 0.32)));
-    }
-
-    .context-tools-dropdown-item input[type="checkbox"] {
-      margin-left: 8px;
-    }
-
-    .context-tools-dropdown-action {
-      width: 100%;
-      border: none;
-      background: none;
-      text-align: left;
-      font: inherit;
-    }
-
-    .context-tools-dropdown-action:disabled {
-      color: var(--fgColor-muted, var(--color-fg-muted, #6e7781));
-      cursor: default;
-    }
-
-    .context-tools-dropdown-action:disabled:hover {
-      background: none;
-    }
-
-    .context-tools-dropdown-divider {
-      height: 1px;
-      margin: 6px 0;
-      background: var(--borderColor-muted, var(--color-border-muted, rgba(27, 31, 36, 0.08)));
-    }
-
-    .context-tools-marker-start,
-    .context-tools-marker-end {
-      box-shadow: 0 0 0 2px transparent;
-      border-radius: 6px;
-    }
-
-    .context-tools-marker-start {
-      box-shadow: 0 0 0 2px var(--color-success-emphasis, #1a7f37);
-    }
-
-    .context-tools-marker-end {
-      box-shadow: 0 0 0 2px var(--color-attention-emphasis, #bf8700);
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-function showToast(message: string, tone: 'info' | 'error' | 'warning' = 'info'): void {
-  let toast = document.querySelector('.context-tools-toast') as HTMLDivElement | null;
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.className = 'context-tools-toast';
-    document.body.appendChild(toast);
-  }
-
-  toast.textContent = message;
-  toast.classList.remove('is-error', 'is-warning');
-  if (tone === 'error') toast.classList.add('is-error');
-  if (tone === 'warning') toast.classList.add('is-warning');
-  toast.classList.add('is-visible');
-
-  window.setTimeout(() => {
-    toast?.classList.remove('is-visible');
-  }, 2200);
-}
-
 function updateCopyButtonState(): void {
-  const hasStart = Boolean(markerRange.start);
-  const hasEnd = Boolean(markerRange.end);
-  const hasRange = hasStart || hasEnd;
-
-  updateMarkerHighlights();
-  if (resetMarkersButton) {
-    resetMarkersButton.disabled = !hasRange;
-  }
-  if (!copyButton) return;
-
-  const label = copyButton.querySelector('.context-tools-label') as HTMLElement | null;
-  const indicator = copyButton.querySelector('.context-tools-range-indicator') as HTMLElement | null;
-
-  if (label) {
-    label.textContent = hasRange ? 'Copy Range as Markdown' : 'Copy as Markdown';
-  }
-  copyButton.setAttribute('aria-label', hasRange ? 'Copy Range as Markdown' : 'Copy as Markdown');
-
-  if (indicator) {
-    if (hasRange) {
-      const rangeLabel = hasStart && hasEnd ? 'Range set' : hasStart ? 'Start set' : 'End set';
-      indicator.textContent = rangeLabel;
-      indicator.hidden = false;
-    } else {
-      indicator.hidden = true;
-    }
-  }
-}
-
-function markerToDomId(marker: Marker): string | null {
-  switch (marker.type) {
-    case 'issue-comment':
-      return `issuecomment-${marker.id}`;
-    case 'review-comment':
-      return `discussion_r${marker.id}`;
-    case 'review':
-      return `pullrequestreview-${marker.id}`;
-    default:
-      return null;
-  }
-}
-
-function resolveMarkerElement(marker: Marker): HTMLElement | null {
-  const domId = markerToDomId(marker);
-  if (!domId) return null;
-  const element = document.getElementById(domId);
-  if (!element) return null;
-  return (
-    element.closest<HTMLElement>(
-      '.timeline-comment, .timeline-comment-group, .js-comment-container, .js-comment, .review-comment, .js-resolvable-thread, .js-review-comment',
-    ) ?? (element as HTMLElement)
-  );
-}
-
-function updateMarkerHighlights(): void {
-  document.querySelectorAll('.context-tools-marker-start, .context-tools-marker-end').forEach((el) => {
-    el.classList.remove('context-tools-marker-start', 'context-tools-marker-end');
-  });
-
-  if (markerRange.start) {
-    const target = resolveMarkerElement(markerRange.start);
-    target?.classList.add('context-tools-marker-start');
-  }
-  if (markerRange.end) {
-    const target = resolveMarkerElement(markerRange.end);
-    target?.classList.add('context-tools-marker-end');
-  }
+  updateMarkerHighlights(markerRange);
+  updateCopyButtonLabel(copyButton, resetMarkersButton, markerRange);
 }
 
 function resetMarkerRange(): void {
@@ -356,6 +100,8 @@ async function handleCopyClick(): Promise<void> {
   const includeFiles = tempIncludeFileDiff ?? defaultIncludeFileDiff;
   const includeCommit = tempIncludeCommit ?? defaultIncludeCommit;
   const smartDiffMode = tempSmartDiffMode ?? defaultSmartDiffMode;
+  const onlyReviewComments = tempOnlyReviewComments ?? defaultOnlyReviewComments;
+  const ignoreResolvedComments = tempIgnoreResolvedComments ?? defaultIgnoreResolvedComments;
 
   try {
     const result = await adapters.messaging.sendMessage<{
@@ -367,6 +113,8 @@ async function handleCopyClick(): Promise<void> {
         includeFiles?: boolean;
         includeCommit?: boolean;
         smartDiffMode?: boolean;
+        onlyReviewComments?: boolean;
+        ignoreResolvedComments?: boolean;
       };
     }, GenerateMarkdownResult>({
       type: 'GENERATE_MARKDOWN',
@@ -377,6 +125,8 @@ async function handleCopyClick(): Promise<void> {
         includeFiles,
         includeCommit,
         smartDiffMode,
+        onlyReviewComments,
+        ignoreResolvedComments,
       },
     });
 
@@ -400,275 +150,28 @@ async function handleCopyClick(): Promise<void> {
   }
 }
 
-function createSettingsDropdown(): HTMLDivElement {
-  const dropdown = document.createElement('div');
-  dropdown.className = 'context-tools-dropdown';
-  dropdown.hidden = true;
-
-  const header = document.createElement('div');
-  header.className = 'context-tools-dropdown-header';
-  header.textContent = 'Export Options';
-  dropdown.appendChild(header);
-
-  // Historical mode toggle
-  const historicalItem = document.createElement('label');
-  historicalItem.className = 'context-tools-dropdown-item';
-  historicalItem.innerHTML = `
-    <span>Timeline mode</span>
-    <input type="checkbox" id="context-tools-historical" ${(tempHistoricalMode ?? defaultHistoricalMode) ? 'checked' : ''}>
-  `;
-  const historicalCheckbox = historicalItem.querySelector('input') as HTMLInputElement;
-  historicalCheckbox.addEventListener('change', () => {
-    tempHistoricalMode = historicalCheckbox.checked;
-  });
-  dropdown.appendChild(historicalItem);
-
-  // Include file diff toggle
-  const fileDiffItem = document.createElement('label');
-  fileDiffItem.className = 'context-tools-dropdown-item';
-  fileDiffItem.innerHTML = `
-    <span>Include file diffs</span>
-    <input type="checkbox" id="context-tools-file-diff" ${(tempIncludeFileDiff ?? defaultIncludeFileDiff) ? 'checked' : ''}>
-  `;
-  const fileDiffCheckbox = fileDiffItem.querySelector('input') as HTMLInputElement;
-  fileDiffCheckbox.addEventListener('change', () => {
-    tempIncludeFileDiff = fileDiffCheckbox.checked;
-  });
-  dropdown.appendChild(fileDiffItem);
-
-  // Include commit diff toggle
-  const commitDiffItem = document.createElement('label');
-  commitDiffItem.className = 'context-tools-dropdown-item';
-  commitDiffItem.innerHTML = `
-    <span>Include commit diffs</span>
-    <input type="checkbox" id="context-tools-commit-diff" ${(tempIncludeCommit ?? defaultIncludeCommit) ? 'checked' : ''}>
-  `;
-  const commitDiffCheckbox = commitDiffItem.querySelector('input') as HTMLInputElement;
-  commitDiffCheckbox.addEventListener('change', () => {
-    tempIncludeCommit = commitDiffCheckbox.checked;
-  });
-  dropdown.appendChild(commitDiffItem);
-
-  // Smart diff mode toggle
-  const smartDiffItem = document.createElement('label');
-  smartDiffItem.className = 'context-tools-dropdown-item';
-  smartDiffItem.innerHTML = `
-    <span>Smart diff mode</span>
-    <input type="checkbox" id="context-tools-smart-diff" ${(tempSmartDiffMode ?? defaultSmartDiffMode) ? 'checked' : ''}>
-  `;
-  const smartDiffCheckbox = smartDiffItem.querySelector('input') as HTMLInputElement;
-  smartDiffCheckbox.addEventListener('change', () => {
-    tempSmartDiffMode = smartDiffCheckbox.checked;
-  });
-  dropdown.appendChild(smartDiffItem);
-
-  const divider = document.createElement('div');
-  divider.className = 'context-tools-dropdown-divider';
-  dropdown.appendChild(divider);
-
-  const resetItem = document.createElement('button');
-  resetItem.type = 'button';
-  resetItem.className = 'context-tools-dropdown-item context-tools-dropdown-action';
-  resetItem.textContent = 'Reset markers';
-  resetItem.addEventListener('click', () => {
-    resetMarkerRange();
-    dropdown.hidden = true;
-  });
-  resetMarkersButton = resetItem;
-  dropdown.appendChild(resetItem);
-
-  return dropdown;
-}
-
-function createCopyButtonGroup(): HTMLDivElement {
-  const group = document.createElement('div');
-  group.className = 'context-tools-button-group';
-  group.style.position = 'relative';
-
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'context-tools-copy-button';
-  button.dataset.contextTools = 'copy-button';
-  button.setAttribute('aria-label', 'Copy as Markdown');
-  button.innerHTML = `
-    <span class="context-tools-label">Copy as Markdown</span>
-    <span class="context-tools-range-indicator" hidden></span>
-  `;
-  button.addEventListener('click', () => {
-    void handleCopyClick();
-  });
-  copyButton = button;
-  group.appendChild(button);
-
-  const trigger = document.createElement('button');
-  trigger.type = 'button';
-  trigger.className = 'context-tools-dropdown-trigger';
-  trigger.setAttribute('aria-label', 'Export options');
-  trigger.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z"/></svg>`;
-
-  const dropdown = createSettingsDropdown();
-  settingsDropdown = dropdown;
-  group.appendChild(dropdown);
-
-  trigger.addEventListener('click', (e) => {
-    e.stopPropagation();
-    dropdown.hidden = !dropdown.hidden;
-  });
-  group.appendChild(trigger);
-
-  // Close dropdown when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!group.contains(e.target as Node)) {
-      dropdown.hidden = true;
-    }
-  });
-
-  return group;
-}
-
-function findIssueAnchorButton(): HTMLElement | null {
-  const actionsContainer = document.querySelector(
-    '[data-component="PH_Actions"] [class*="HeaderMenu-module__menuActionsContainer"]',
-  );
-  if (actionsContainer?.firstElementChild) {
-    return actionsContainer.firstElementChild as HTMLElement;
-  }
-
-  const header =
-    document.querySelector('#partial-discussion-header') ??
-    document.querySelector('.gh-header');
-  const copyIcon =
-    header?.querySelector('button svg.octicon-copy') ??
-    document.querySelector('button svg.octicon-copy');
-  if (copyIcon) return copyIcon.closest('button');
-
-  const newIssueButton = findNewIssueButton();
-  if (newIssueButton) return newIssueButton;
-
-  return null;
-}
-
-function findNewIssueButton(): HTMLElement | null {
-  const headerButton =
-    document.querySelector<HTMLElement>(
-      '[class*="HeaderMenu-module__buttonContainer"] a[href*="/issues/new"]',
-    ) ??
-    document.querySelector<HTMLElement>(
-      '#partial-discussion-header a[href*="/issues/new"], .gh-header a[href*="/issues/new"]',
-    );
-  if (headerButton) {
-    return (
-      headerButton.closest<HTMLElement>('[class*="HeaderMenu-module__buttonContainer"]') ??
-      headerButton
-    );
-  }
-
-  const candidates = Array.from(
-    document.querySelectorAll<HTMLElement>('a[href*="/issues/new"], button'),
-  );
-  const candidate = candidates.find((item) => {
-    const text = item.textContent?.trim().toLowerCase();
-    return text === 'new issue';
-  });
-  if (!candidate) return null;
-  return (
-    candidate.closest<HTMLElement>('[class*="HeaderMenu-module__buttonContainer"]') ?? candidate
-  );
-}
-
-function findPrAnchorButton(): HTMLElement | null {
-  // Try permission-dependent edit button first
-  const editButton =
-    document.querySelector<HTMLElement>('button[aria-label="Edit Pull Request title"]') ??
-    document.querySelector<HTMLElement>('button.js-title-edit-button');
-  if (editButton) return editButton;
-
-  // Fallback: find the header actions area (always present)
-  const header =
-    document.querySelector('#partial-discussion-header') ??
-    document.querySelector('.gh-header');
-  if (!header) return null;
-
-  // Look for copy link button or any action button in header
-  const copyIcon = header.querySelector('button svg.octicon-copy');
-  if (copyIcon) return copyIcon.closest('button');
-
-  // Fallback to header actions container
-  const actionsContainer = header.querySelector('.gh-header-actions');
-  if (actionsContainer?.firstElementChild) {
-    return actionsContainer.firstElementChild as HTMLElement;
-  }
-
-  return null;
+function buildDropdownOptions(): DropdownOptions {
+  return {
+    isPull: currentPage?.kind === 'pull',
+    historicalMode: tempHistoricalMode ?? defaultHistoricalMode,
+    includeFileDiff: tempIncludeFileDiff ?? defaultIncludeFileDiff,
+    includeCommit: tempIncludeCommit ?? defaultIncludeCommit,
+    smartDiffMode: tempSmartDiffMode ?? defaultSmartDiffMode,
+    onlyReviewComments: tempOnlyReviewComments ?? defaultOnlyReviewComments,
+    ignoreResolvedComments: tempIgnoreResolvedComments ?? defaultIgnoreResolvedComments,
+    onHistoricalModeChange: (checked) => { tempHistoricalMode = checked; },
+    onIncludeFileDiffChange: (checked) => { tempIncludeFileDiff = checked; },
+    onIncludeCommitChange: (checked) => { tempIncludeCommit = checked; },
+    onSmartDiffModeChange: (checked) => { tempSmartDiffMode = checked; },
+    onOnlyReviewCommentsChange: (checked) => { tempOnlyReviewComments = checked; },
+    onIgnoreResolvedCommentsChange: (checked) => { tempIgnoreResolvedComments = checked; },
+    onResetMarkers: resetMarkerRange,
+  };
 }
 
 function resolveMarkerForMenu(menu: Element): Marker | null {
   const marker = findMarkerInElement(menu);
   return marker ?? lastMarkerCandidate;
-}
-
-function closeMenu(menu: Element): void {
-  const details = menu.closest('details');
-  if (details) {
-    details.removeAttribute('open');
-  }
-}
-
-function createMenuItem(template: HTMLElement, label: string, onClick: () => void): HTMLElement {
-  const item = template.cloneNode(true) as HTMLElement;
-  item.dataset.contextTools = 'menu-item';
-  item.removeAttribute('id');
-  item.removeAttribute('aria-keyshortcuts');
-  item.removeAttribute('data-hotkey');
-  item.tabIndex = -1;
-
-  const labelEl =
-    item.querySelector('[id$="--label"]') ??
-    item.querySelector('span[class*="ItemLabel"]') ??
-    item.querySelector('span');
-
-  if (labelEl) {
-    labelEl.textContent = label;
-    const uniqueSuffix = Math.random().toString(36).slice(2, 8);
-    const newId = `context-tools-${label.replace(/\s+/g, '-').toLowerCase()}-${uniqueSuffix}`;
-    labelEl.id = newId;
-    item.setAttribute('aria-labelledby', newId);
-  } else {
-    // Fallback for templates without span labels (e.g., button.dropdown-item)
-    item.textContent = label;
-    item.setAttribute('aria-label', label);
-  }
-
-  item.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onClick();
-  });
-
-  return item;
-}
-
-function isCommentMenu(menu: Element): boolean {
-  if (menu.querySelector('li[aria-keyshortcuts="q"]')) return true;
-  if (menu.querySelector('li[aria-keyshortcuts="c"]')) return true;
-  if (menu.querySelector('button[data-hotkey="r"]')) return true;
-  if (menu.querySelector('.js-comment-quote-reply')) return true;
-  if (menu.querySelector('.js-comment-edit-button')) return true;
-  const text = menu.textContent?.toLowerCase() ?? '';
-  if (text.includes('quote reply') || text.includes('copy link')) return true;
-  return false;
-}
-
-function findMenuItemTemplate(menu: Element): HTMLElement | null {
-  // For ul-based menus, use li[role="menuitem"]
-  if (menu.tagName === 'UL') {
-    return menu.querySelector('li[role="menuitem"]');
-  }
-  // For details-menu, prefer button, then anchor
-  return (
-    menu.querySelector('button[role="menuitem"]') ??
-    menu.querySelector('a[role="menuitem"]')
-  );
 }
 
 function injectMenuItems(menu: Element): void {
@@ -781,8 +284,14 @@ function tryInjectCopyButton(): void {
   const anchor = currentPage.kind === 'pull' ? findPrAnchorButton() : findIssueAnchorButton();
   if (!anchor || !anchor.parentElement) return;
 
-  const buttonGroup = createCopyButtonGroup();
-  anchor.parentElement.insertBefore(buttonGroup, anchor);
+  const result = createCopyButtonGroup(buildDropdownOptions(), () => {
+    void handleCopyClick();
+  });
+  copyButton = result.copyButton;
+  settingsDropdown = result.settingsDropdown;
+  resetMarkersButton = result.resetMarkersButton;
+
+  anchor.parentElement.insertBefore(result.group, anchor);
   copyButtonInjected = true;
   updateCopyButtonState();
   disconnectPageObserver();
@@ -823,7 +332,7 @@ function handlePageChange(): void {
 
   currentPage = parsePageRef(window.location.pathname);
   markerRange = {};
-  updateMarkerHighlights();
+  updateMarkerHighlights(markerRange);
   lastMarkerCandidate = null;
   copyButtonInjected = false;
   settingsDropdown = null;
@@ -858,6 +367,8 @@ async function init(): Promise<void> {
     defaultIncludeFileDiff = settings?.includeFileDiff ?? false;
     defaultIncludeCommit = settings?.includeCommit ?? false;
     defaultSmartDiffMode = settings?.smartDiffMode ?? false;
+    defaultOnlyReviewComments = settings?.onlyReviewComments ?? false;
+    defaultIgnoreResolvedComments = settings?.ignoreResolvedComments ?? false;
   } catch {
     // Default to enabled if settings are unavailable.
   }

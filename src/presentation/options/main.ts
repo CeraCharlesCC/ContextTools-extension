@@ -13,6 +13,8 @@ const historicalModeToggle = document.getElementById('historical-mode-toggle') a
 const includeFileDiffToggle = document.getElementById('include-file-diff-toggle') as HTMLInputElement;
 const includeCommitDiffToggle = document.getElementById('include-commit-diff-toggle') as HTMLInputElement;
 const smartDiffModeToggle = document.getElementById('smart-diff-mode-toggle') as HTMLInputElement;
+const onlyReviewCommentsToggle = document.getElementById('only-review-comments-toggle') as HTMLInputElement;
+const ignoreResolvedCommentsToggle = document.getElementById('ignore-resolved-comments-toggle') as HTMLInputElement;
 const themeSelect = document.getElementById('theme-select') as HTMLSelectElement;
 const githubTokenInput = document.getElementById('github-token') as HTMLInputElement;
 const githubTokenToggle = document.getElementById('github-token-toggle') as HTMLButtonElement;
@@ -44,6 +46,8 @@ async function loadSettings(): Promise<void> {
     includeFileDiffToggle.checked = settings.includeFileDiff;
     includeCommitDiffToggle.checked = settings.includeCommit;
     smartDiffModeToggle.checked = settings.smartDiffMode;
+    onlyReviewCommentsToggle.checked = settings.onlyReviewComments;
+    ignoreResolvedCommentsToggle.checked = settings.ignoreResolvedComments;
   } catch (error) {
     console.error('Failed to load settings:', error);
     showStatus('Failed to load settings', 'error');
@@ -116,6 +120,14 @@ includeCommitDiffToggle.addEventListener('change', () => {
 
 smartDiffModeToggle.addEventListener('change', () => {
   updateSettings({ smartDiffMode: smartDiffModeToggle.checked });
+});
+
+onlyReviewCommentsToggle.addEventListener('change', () => {
+  updateSettings({ onlyReviewComments: onlyReviewCommentsToggle.checked });
+});
+
+ignoreResolvedCommentsToggle.addEventListener('change', () => {
+  updateSettings({ ignoreResolvedComments: ignoreResolvedCommentsToggle.checked });
 });
 
 githubTokenToggle.addEventListener('click', () => {

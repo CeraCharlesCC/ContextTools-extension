@@ -10,6 +10,8 @@ export interface Settings {
   readonly includeFileDiff: boolean;
   readonly includeCommit: boolean;
   readonly smartDiffMode: boolean;
+  readonly onlyReviewComments: boolean;
+  readonly ignoreResolvedComments: boolean;
 }
 
 export function createDefaultSettings(): Settings {
@@ -21,6 +23,8 @@ export function createDefaultSettings(): Settings {
     includeFileDiff: false,
     includeCommit: false,
     smartDiffMode: false,
+    onlyReviewComments: false,
+    ignoreResolvedComments: false,
   };
 }
 
@@ -32,6 +36,8 @@ export function validateSettings(settings: Partial<Settings>): settings is Setti
     typeof settings.historicalMode === 'boolean' &&
     typeof settings.includeFileDiff === 'boolean' &&
     typeof settings.includeCommit === 'boolean' &&
-    typeof settings.smartDiffMode === 'boolean'
+    typeof settings.smartDiffMode === 'boolean' &&
+    typeof settings.onlyReviewComments === 'boolean' &&
+    typeof settings.ignoreResolvedComments === 'boolean'
   );
 }
