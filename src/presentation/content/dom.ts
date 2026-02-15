@@ -369,29 +369,45 @@ function findNewIssueButton(): HTMLElement | null {
 }
 
 export function findPrAnchorButton(): HTMLElement | null {
-    // Try permission-dependent edit button first
-    const editButton =
-        document.querySelector<HTMLElement>('button[aria-label="Edit Pull Request title"]') ??
-        document.querySelector<HTMLElement>('button.js-title-edit-button');
-    if (editButton) return editButton;
+  // --- New GitHub PR header (PageHeader) ---
+  const phActions = document.querySelector<HTMLElement>('[data-component="PH_Actions"]');
+  if (phActions) {
+    const copyBtn =
+      phActions.querySelector('button svg.octicon-copy')?.closest('button') ??
+      phActions.querySelector<HTMLElement>('button[aria-label*="Copy"]') ??
+      phActions.querySelector<HTMLElement>('button[aria-label*="copy"]');
+    if (copyBtn) return copyBtn as HTMLElement;
 
-    // Fallback: find the header actions area (always present)
-    const header =
-        document.querySelector('#partial-discussion-header') ??
-        document.querySelector('.gh-header');
-    if (!header) return null;
+    const actionRow =
+      phActions.querySelector<HTMLElement>('div.d-flex.gap-2') ??
+      phActions.querySelector<HTMLElement>('[class*="menuActionsContainer"]');
+    const firstAction = actionRow?.querySelector<HTMLElement>('button, a, summary');
+    if (firstAction) return firstAction;
+  }
 
-    // Look for copy link button or any action button in header
+  // --- Old layout fallbacks ---
+  const editButton =
+    document.querySelector<HTMLElement>('button[aria-label="Edit Pull Request title"]') ??
+    document.querySelector<HTMLElement>('button.js-title-edit-button');
+  if (editButton) return editButton;
+
+  const header =
+    document.querySelector('#partial-discussion-header') ??
+    document.querySelector('.gh-header');
+  if (header) {
     const copyIcon = header.querySelector('button svg.octicon-copy');
-    if (copyIcon) return copyIcon.closest('button');
+    if (copyIcon) return copyIcon.closest('button') as HTMLElement;
 
-    // Fallback to header actions container
     const actionsContainer = header.querySelector('.gh-header-actions');
     if (actionsContainer?.firstElementChild) {
-        return actionsContainer.firstElementChild as HTMLElement;
+      return actionsContainer.firstElementChild as HTMLElement;
     }
+  }
 
-    return null;
+  const globalCopy = document.querySelector('button svg.octicon-copy');
+  if (globalCopy) return globalCopy.closest('button') as HTMLElement;
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
