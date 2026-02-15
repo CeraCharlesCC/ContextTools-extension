@@ -141,33 +141,149 @@ const REVIEW_THREAD_RESOLUTION_QUERY = `
   }
 `;
 
+interface PullReviewThreadGraphQLCommentNode {
+  databaseId?: number | null;
+}
+
+interface PullReviewThreadGraphQLThreadNode {
+  isResolved?: boolean;
+  comments?: {
+    pageInfo?: {
+      hasNextPage?: boolean;
+    };
+    nodes?: Array<PullReviewThreadGraphQLCommentNode | null>;
+  } | null;
+}
+
+interface PullReviewThreadGraphQLConnection {
+  pageInfo?: {
+    hasNextPage?: boolean;
+    endCursor?: string | null;
+  };
+  nodes?: Array<PullReviewThreadGraphQLThreadNode | null>;
+}
+
 interface PullReviewThreadResolutionQueryData {
   repository?: {
     pullRequest?: {
-      reviewThreads?: {
-        pageInfo?: {
-          hasNextPage?: boolean;
-          endCursor?: string | null;
-        };
-        nodes?: Array<{
-          isResolved?: boolean;
-          comments?: {
-            pageInfo?: {
-              hasNextPage?: boolean;
-            };
-            nodes?: Array<{
-              databaseId?: number | null;
-            } | null>;
-          } | null;
-        } | null>;
-      } | null;
+      reviewThreads?: PullReviewThreadGraphQLConnection | null;
     } | null;
   } | null;
+}
+
+interface PullReviewThreadRESTComment {
+  id?: number | null;
+  databaseId?: number | null;
+  database_id?: number | null;
+}
+
+interface PullReviewThreadREST {
+  resolved?: boolean | null;
+  isResolved?: boolean | null;
+  comments?: PullReviewThreadRESTComment[] | null;
 }
 
 export interface PullReviewThreadResolution {
   commentResolution: Map<number, boolean>;
   incomplete: boolean;
+}
+
+function resolveCommentId(comment: PullReviewThreadRESTComment): number | null {
+  if (typeof comment.id === 'number') return comment.id;
+  if (typeof comment.databaseId === 'number') return comment.databaseId;
+  if (typeof comment.database_id === 'number') return comment.database_id;
+  return null;
+}
+
+function resolveThreadState(thread: PullReviewThreadREST): boolean | null {
+  if (typeof thread.resolved === 'boolean') return thread.resolved;
+  if (typeof thread.isResolved === 'boolean') return thread.isResolved;
+  return null;
+}
+
+async function getPullReviewThreadResolutionFromRest(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  token?: string;
+}): Promise<PullReviewThreadResolution> {
+  const { owner, repo, number, token } = params;
+  const url = `${API_ROOT}/repos/${owner}/${repo}/pulls/${number}/threads?per_page=100`;
+  const threads = await fetchAllPages<PullReviewThreadREST>(url, token);
+
+  const commentResolution = new Map<number, boolean>();
+  let incomplete = false;
+
+  threads.forEach((thread) => {
+    const isResolved = resolveThreadState(thread);
+    if (isResolved === null) {
+      incomplete = true;
+      return;
+    }
+
+    if (!Array.isArray(thread.comments)) {
+      incomplete = true;
+      return;
+    }
+
+    thread.comments.forEach((comment) => {
+      const commentId = resolveCommentId(comment);
+      if (commentId === null) {
+        incomplete = true;
+        return;
+      }
+      commentResolution.set(commentId, isResolved);
+    });
+  });
+
+  return { commentResolution, incomplete };
+}
+
+async function getPullReviewThreadResolutionFromGraphQL(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  token?: string;
+}): Promise<PullReviewThreadResolution> {
+  const { owner, repo, number, token } = params;
+  const commentResolution = new Map<number, boolean>();
+  let incomplete = false;
+  let after: string | null = null;
+
+  for (;;) {
+    const data: PullReviewThreadResolutionQueryData = await fetchGraphQL<PullReviewThreadResolutionQueryData>(
+      REVIEW_THREAD_RESOLUTION_QUERY,
+      { owner, repo, number, after },
+      token,
+    );
+
+    const reviewThreads: PullReviewThreadGraphQLConnection | null | undefined =
+      data.repository?.pullRequest?.reviewThreads;
+    if (!reviewThreads) {
+      break;
+    }
+
+    reviewThreads.nodes?.forEach((thread: PullReviewThreadGraphQLThreadNode | null) => {
+      if (!thread?.comments) return;
+      if (thread.comments.pageInfo?.hasNextPage) {
+        incomplete = true;
+      }
+
+      thread.comments.nodes?.forEach((commentNode: PullReviewThreadGraphQLCommentNode | null) => {
+        const commentId = commentNode?.databaseId;
+        if (typeof commentId === 'number') {
+          commentResolution.set(commentId, thread.isResolved === true);
+        }
+      });
+    });
+
+    if (!reviewThreads.pageInfo?.hasNextPage) {
+      break;
+    }
+    after = reviewThreads.pageInfo.endCursor ?? null;
+  }
+
+  return { commentResolution, incomplete };
 }
 
 export async function getIssue(params: { owner: string; repo: string; number: number; token?: string }) {
@@ -221,42 +337,17 @@ export async function getPullReviewThreadResolution(params: {
   number: number;
   token?: string;
 }): Promise<PullReviewThreadResolution> {
-  const { owner, repo, number, token } = params;
-  const commentResolution = new Map<number, boolean>();
-  let incomplete = false;
-  let after: string | null = null;
-
-  for (;;) {
-    const data = await fetchGraphQL<PullReviewThreadResolutionQueryData>(
-      REVIEW_THREAD_RESOLUTION_QUERY,
-      { owner, repo, number, after },
-      token,
-    );
-
-    const reviewThreads = data.repository?.pullRequest?.reviewThreads;
-    if (!reviewThreads) {
-      break;
+  try {
+    return await getPullReviewThreadResolutionFromRest(params);
+  } catch (restError) {
+    try {
+      return await getPullReviewThreadResolutionFromGraphQL(params);
+    } catch (graphqlError) {
+      const restMessage = restError instanceof Error ? restError.message : String(restError);
+      const graphqlMessage = graphqlError instanceof Error ? graphqlError.message : String(graphqlError);
+      throw new Error(
+        `Failed to load review thread resolution via REST and GraphQL. REST: ${restMessage}. GraphQL: ${graphqlMessage}`,
+      );
     }
-
-    reviewThreads.nodes?.forEach((thread) => {
-      if (!thread?.comments) return;
-      if (thread.comments.pageInfo?.hasNextPage) {
-        incomplete = true;
-      }
-
-      thread.comments.nodes?.forEach((commentNode) => {
-        const commentId = commentNode?.databaseId;
-        if (typeof commentId === 'number') {
-          commentResolution.set(commentId, thread.isResolved === true);
-        }
-      });
-    });
-
-    if (!reviewThreads.pageInfo?.hasNextPage) {
-      break;
-    }
-    after = reviewThreads.pageInfo.endCursor ?? null;
   }
-
-  return { commentResolution, incomplete };
 }
