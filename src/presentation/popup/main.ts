@@ -42,7 +42,7 @@ async function loadPageInfo(): Promise<void> {
     } else {
       pageInfoEl.innerHTML = '<p class="loading">No active tab</p>';
     }
-  } catch (error) {
+  } catch {
     pageInfoEl.innerHTML = '<p class="loading">Unable to access page</p>';
   }
 }
