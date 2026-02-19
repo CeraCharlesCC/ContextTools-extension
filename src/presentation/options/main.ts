@@ -105,76 +105,65 @@ async function updateToken(token: string): Promise<void> {
   }
 }
 
+type PrBooleanSettingKey =
+  | 'enabled'
+  | 'notifications'
+  | 'historicalMode'
+  | 'includeFileDiff'
+  | 'includeCommit'
+  | 'smartDiffMode'
+  | 'onlyReviewComments'
+  | 'ignoreResolvedComments';
+
+type IssueBooleanSettingKey = 'enabled' | 'notifications' | 'historicalMode' | 'smartDiffMode';
+
+function bindPrBooleanSetting(element: HTMLInputElement, key: PrBooleanSettingKey): void {
+  element.addEventListener('change', () => {
+    updateSettings({
+      pr: { [key]: element.checked } as Partial<Settings['pr']>,
+    });
+  });
+}
+
+function bindIssueBooleanSetting(element: HTMLInputElement, key: IssueBooleanSettingKey): void {
+  element.addEventListener('change', () => {
+    updateSettings({
+      issue: { [key]: element.checked } as Partial<Settings['issue']>,
+    });
+  });
+}
+
+function bindPrThemeSetting(element: HTMLSelectElement): void {
+  element.addEventListener('change', () => {
+    updateSettings({
+      pr: { theme: element.value as Settings['pr']['theme'] },
+    });
+  });
+}
+
+function bindIssueThemeSetting(element: HTMLSelectElement): void {
+  element.addEventListener('change', () => {
+    updateSettings({
+      issue: { theme: element.value as Settings['issue']['theme'] },
+    });
+  });
+}
+
 // Event handlers
-prEnabledToggle.addEventListener('change', () => {
-  updateSettings({
-    pr: { enabled: prEnabledToggle.checked },
-  });
-});
-
-prNotificationsToggle.addEventListener('change', () => {
-  updateSettings({
-    pr: { notifications: prNotificationsToggle.checked },
-  });
-});
-
-prThemeSelect.addEventListener('change', () => {
-  const theme = prThemeSelect.value as Settings['pr']['theme'];
-  updateSettings({
-    pr: { theme },
-  });
-});
-
-issueEnabledToggle.addEventListener('change', () => {
-  updateSettings({
-    issue: { enabled: issueEnabledToggle.checked },
-  });
-});
-
-issueNotificationsToggle.addEventListener('change', () => {
-  updateSettings({
-    issue: { notifications: issueNotificationsToggle.checked },
-  });
-});
-
-issueThemeSelect.addEventListener('change', () => {
-  const theme = issueThemeSelect.value as Settings['issue']['theme'];
-  updateSettings({
-    issue: { theme },
-  });
-});
-
-prHistoricalModeToggle.addEventListener('change', () => {
-  updateSettings({ pr: { historicalMode: prHistoricalModeToggle.checked } });
-});
-
-prIncludeFileDiffToggle.addEventListener('change', () => {
-  updateSettings({ pr: { includeFileDiff: prIncludeFileDiffToggle.checked } });
-});
-
-prIncludeCommitDiffToggle.addEventListener('change', () => {
-  updateSettings({ pr: { includeCommit: prIncludeCommitDiffToggle.checked } });
-});
-
-prSmartDiffModeToggle.addEventListener('change', () => {
-  updateSettings({ pr: { smartDiffMode: prSmartDiffModeToggle.checked } });
-});
-
-prOnlyReviewCommentsToggle.addEventListener('change', () => {
-  updateSettings({ pr: { onlyReviewComments: prOnlyReviewCommentsToggle.checked } });
-});
-
-prIgnoreResolvedCommentsToggle.addEventListener('change', () => {
-  updateSettings({ pr: { ignoreResolvedComments: prIgnoreResolvedCommentsToggle.checked } });
-});
-
-issueHistoricalModeToggle.addEventListener('change', () => {
-  updateSettings({ issue: { historicalMode: issueHistoricalModeToggle.checked } });
-});
-
-issueSmartDiffModeToggle.addEventListener('change', () => {
-  updateSettings({ issue: { smartDiffMode: issueSmartDiffModeToggle.checked } });
-});
+bindPrBooleanSetting(prEnabledToggle, 'enabled');
+bindPrBooleanSetting(prNotificationsToggle, 'notifications');
+bindPrThemeSetting(prThemeSelect);
+bindIssueBooleanSetting(issueEnabledToggle, 'enabled');
+bindIssueBooleanSetting(issueNotificationsToggle, 'notifications');
+bindIssueThemeSetting(issueThemeSelect);
+bindPrBooleanSetting(prHistoricalModeToggle, 'historicalMode');
+bindPrBooleanSetting(prIncludeFileDiffToggle, 'includeFileDiff');
+bindPrBooleanSetting(prIncludeCommitDiffToggle, 'includeCommit');
+bindPrBooleanSetting(prSmartDiffModeToggle, 'smartDiffMode');
+bindPrBooleanSetting(prOnlyReviewCommentsToggle, 'onlyReviewComments');
+bindPrBooleanSetting(prIgnoreResolvedCommentsToggle, 'ignoreResolvedComments');
+bindIssueBooleanSetting(issueHistoricalModeToggle, 'historicalMode');
+bindIssueBooleanSetting(issueSmartDiffModeToggle, 'smartDiffMode');
 
 githubTokenToggle.addEventListener('click', () => {
   const isHidden = githubTokenInput.type === 'password';

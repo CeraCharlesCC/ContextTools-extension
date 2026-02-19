@@ -47,14 +47,34 @@ let tempIncludeCommit: boolean | null = null;
 let tempSmartDiffMode: boolean | null = null;
 let tempOnlyReviewComments: boolean | null = null;
 let tempIgnoreResolvedComments: boolean | null = null;
-let defaultPrHistoricalMode = true;
-let defaultPrIncludeFileDiff = false;
-let defaultPrIncludeCommit = false;
-let defaultPrSmartDiffMode = false;
-let defaultPrOnlyReviewComments = false;
-let defaultPrIgnoreResolvedComments = false;
-let defaultIssueHistoricalMode = true;
-let defaultIssueSmartDiffMode = false;
+
+type PrExportDefaults = {
+  historicalMode: boolean;
+  includeFileDiff: boolean;
+  includeCommit: boolean;
+  smartDiffMode: boolean;
+  onlyReviewComments: boolean;
+  ignoreResolvedComments: boolean;
+};
+
+type IssueExportDefaults = {
+  historicalMode: boolean;
+  smartDiffMode: boolean;
+};
+
+let defaultPrSettings: PrExportDefaults = {
+  historicalMode: true,
+  includeFileDiff: false,
+  includeCommit: false,
+  smartDiffMode: false,
+  onlyReviewComments: false,
+  ignoreResolvedComments: false,
+};
+
+let defaultIssueSettings: IssueExportDefaults = {
+  historicalMode: true,
+  smartDiffMode: false,
+};
 
 // Observer state for throttling and cleanup
 let pageObserver: MutationObserver | null = null;
@@ -93,21 +113,14 @@ function resetMarkerRange(): void {
 
 function resolveDefaultExportOptions() {
   if (currentPage?.kind === 'pull') {
-    return {
-      historicalMode: defaultPrHistoricalMode,
-      includeFileDiff: defaultPrIncludeFileDiff,
-      includeCommit: defaultPrIncludeCommit,
-      smartDiffMode: defaultPrSmartDiffMode,
-      onlyReviewComments: defaultPrOnlyReviewComments,
-      ignoreResolvedComments: defaultPrIgnoreResolvedComments,
-    };
+    return { ...defaultPrSettings };
   }
 
   return {
-    historicalMode: defaultIssueHistoricalMode,
+    historicalMode: defaultIssueSettings.historicalMode,
     includeFileDiff: false,
     includeCommit: false,
-    smartDiffMode: defaultIssueSmartDiffMode,
+    smartDiffMode: defaultIssueSettings.smartDiffMode,
     onlyReviewComments: false,
     ignoreResolvedComments: false,
   };
@@ -410,14 +423,18 @@ async function init(): Promise<void> {
     isEnabled = prEnabled || issueEnabled;
     if (!isEnabled) return;
     // Load markdown export defaults from settings
-    defaultPrHistoricalMode = settings?.pr.historicalMode ?? true;
-    defaultPrIncludeFileDiff = settings?.pr.includeFileDiff ?? false;
-    defaultPrIncludeCommit = settings?.pr.includeCommit ?? false;
-    defaultPrSmartDiffMode = settings?.pr.smartDiffMode ?? false;
-    defaultPrOnlyReviewComments = settings?.pr.onlyReviewComments ?? false;
-    defaultPrIgnoreResolvedComments = settings?.pr.ignoreResolvedComments ?? false;
-    defaultIssueHistoricalMode = settings?.issue.historicalMode ?? true;
-    defaultIssueSmartDiffMode = settings?.issue.smartDiffMode ?? false;
+    defaultPrSettings = {
+      historicalMode: settings?.pr.historicalMode ?? true,
+      includeFileDiff: settings?.pr.includeFileDiff ?? false,
+      includeCommit: settings?.pr.includeCommit ?? false,
+      smartDiffMode: settings?.pr.smartDiffMode ?? false,
+      onlyReviewComments: settings?.pr.onlyReviewComments ?? false,
+      ignoreResolvedComments: settings?.pr.ignoreResolvedComments ?? false,
+    };
+    defaultIssueSettings = {
+      historicalMode: settings?.issue.historicalMode ?? true,
+      smartDiffMode: settings?.issue.smartDiffMode ?? false,
+    };
   } catch {
     // Default to enabled if settings are unavailable.
   }

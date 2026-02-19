@@ -2,7 +2,7 @@
  * Popup Main Script
  */
 import { getBrowserAdapters } from '@infrastructure/adapters';
-import type { Settings } from '@domain/entities';
+import type { Settings, SettingsUpdate } from '@domain/entities';
 
 const adapters = getBrowserAdapters();
 
@@ -47,36 +47,25 @@ async function loadPageInfo(): Promise<void> {
   }
 }
 
-// Event handlers
-prEnabledToggle.addEventListener('change', async () => {
-  try {
-    const enabled = prEnabledToggle.checked;
-    await adapters.messaging.sendMessage({
-      type: 'UPDATE_SETTINGS',
-      payload: {
-        pr: { enabled },
-      },
-    });
-  } catch (error) {
-    console.error('Failed to update settings:', error);
-    prEnabledToggle.checked = !prEnabledToggle.checked;
-  }
-});
+function bindEnabledToggle(toggle: HTMLInputElement, scope: 'pr' | 'issue'): void {
+  toggle.addEventListener('change', async () => {
+    try {
+      const enabled = toggle.checked;
+      const payload = { [scope]: { enabled } } as SettingsUpdate;
+      await adapters.messaging.sendMessage({
+        type: 'UPDATE_SETTINGS',
+        payload,
+      });
+    } catch (error) {
+      console.error('Failed to update settings:', error);
+      toggle.checked = !toggle.checked;
+    }
+  });
+}
 
-issueEnabledToggle.addEventListener('change', async () => {
-  try {
-    const enabled = issueEnabledToggle.checked;
-    await adapters.messaging.sendMessage({
-      type: 'UPDATE_SETTINGS',
-      payload: {
-        issue: { enabled },
-      },
-    });
-  } catch (error) {
-    console.error('Failed to update settings:', error);
-    issueEnabledToggle.checked = !issueEnabledToggle.checked;
-  }
-});
+// Event handlers
+bindEnabledToggle(prEnabledToggle, 'pr');
+bindEnabledToggle(issueEnabledToggle, 'issue');
 
 optionsBtn.addEventListener('click', () => {
   adapters.runtime.openOptionsPage();

@@ -94,8 +94,5 @@ export function validateSettings(settings: Partial<Settings>): settings is Setti
     return false;
   }
 
-  return (
-    validatePRSettings(settings.pr as Partial<PRSettings>) &&
-    validateIssueSettings(settings.issue as Partial<IssueSettings>)
-  );
+  return validatePRSettings(settings.pr) && validateIssueSettings(settings.issue);
 }
