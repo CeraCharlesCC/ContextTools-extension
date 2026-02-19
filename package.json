@@ -10,6 +10,8 @@
     "build": "npm run build:chrome && npm run build:firefox",
     "build:chrome": "cross-env TARGET_BROWSER=chrome VITE_BUILD_TARGET=main vite build && cross-env TARGET_BROWSER=chrome VITE_BUILD_TARGET=content vite build",
     "build:firefox": "cross-env TARGET_BROWSER=firefox VITE_BUILD_TARGET=main vite build && cross-env TARGET_BROWSER=firefox VITE_BUILD_TARGET=content vite build",
+    "sync:versions": "node scripts/sync-versions.mjs",
+    "sync:versions:check": "node scripts/sync-versions.mjs --check",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
     "clean": "rimraf dist dist-chrome dist-firefox"

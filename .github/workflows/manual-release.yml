@@ -1,0 +1,107 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (defaults to v<package.json version>)
+        required: false
+        type: string
+      name:
+        description: Release name (defaults to tag)
+        required: false
+        type: string
+      prerelease:
+        description: Mark this release as prerelease
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync versions
+        run: npm run sync:versions
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Resolve release metadata
+        id: release_meta
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG_INPUT="${{ github.event.inputs.tag }}"
+          NAME_INPUT="${{ github.event.inputs.name }}"
+
+          if [ -n "$TAG_INPUT" ]; then
+            TAG="$TAG_INPUT"
+          else
+            TAG="v$VERSION"
+          fi
+
+          if [ -n "$NAME_INPUT" ]; then
+            RELEASE_NAME="$NAME_INPUT"
+          else
+            RELEASE_NAME="$TAG"
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Package release artifacts
+        run: |
+          mkdir -p release
+          (cd dist-chrome && zip -r "../release/context-tools-chrome-v${{ steps.release_meta.outputs.version }}.zip" .)
+          (cd dist-firefox && zip -r "../release/context-tools-firefox-v${{ steps.release_meta.outputs.version }}.zip" .)
+
+      - name: Attest chrome artifact
+        id: attest_chrome
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/context-tools-chrome-v${{ steps.release_meta.outputs.version }}.zip
+
+      - name: Attest firefox artifact
+        id: attest_firefox
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/context-tools-firefox-v${{ steps.release_meta.outputs.version }}.zip
+
+      - name: Create GitHub release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: ${{ steps.release_meta.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          files: |
+            release/context-tools-chrome-v${{ steps.release_meta.outputs.version }}.zip
+            release/context-tools-firefox-v${{ steps.release_meta.outputs.version }}.zip
+            ${{ steps.attest_chrome.outputs.bundle-path }}
+            ${{ steps.attest_firefox.outputs.bundle-path }}
