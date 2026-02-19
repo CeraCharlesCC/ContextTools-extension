@@ -58,9 +58,10 @@ export function createDefaultSettings(): Settings {
   };
 }
 
-function validateCommonSettings(settings: Partial<CommonSettings>): boolean {
+function validateCommonSettings(settings: Partial<CommonSettings>): settings is CommonSettings {
   return (
-    ['light', 'dark', 'system'].includes(settings.theme ?? '') &&
+    typeof settings.theme === 'string' &&
+    ['light', 'dark', 'system'].includes(settings.theme) &&
     typeof settings.notifications === 'boolean'
   );
 }
