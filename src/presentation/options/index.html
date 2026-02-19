@@ -17,32 +17,6 @@
 
     <main class="main">
       <section class="section">
-        <h2>General</h2>
-
-        <div class="setting-row">
-          <div class="setting-info">
-            <label for="enabled-toggle">Enable Extension</label>
-            <p class="setting-description">Turn the extension on or off</p>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="enabled-toggle">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-info">
-            <label for="notifications-toggle">Notifications</label>
-            <p class="setting-description">Show browser notifications</p>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="notifications-toggle">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-      </section>
-
-      <section class="section">
         <h2>GitHub</h2>
 
         <div class="setting-row setting-row-column">
@@ -58,88 +32,166 @@
       </section>
 
       <section class="section">
-        <h2>Markdown Export</h2>
+        <h2>Pull Requests</h2>
 
         <div class="setting-row">
           <div class="setting-info">
-            <label for="historical-mode-toggle">Timeline Mode</label>
+            <label for="pr-enabled-toggle">Enable Extension</label>
+            <p class="setting-description">Turn extension features on or off for pull requests</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="pr-enabled-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="pr-notifications-toggle">Notifications</label>
+            <p class="setting-description">Show browser notifications for pull request activity</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="pr-notifications-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="pr-theme-select">Theme</label>
+            <p class="setting-description">Choose color scheme for pull request workflows</p>
+          </div>
+          <select id="pr-theme-select" class="select">
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="pr-historical-mode-toggle">Timeline Mode</label>
             <p class="setting-description">Show comments in chronological order</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" id="historical-mode-toggle">
+            <input type="checkbox" id="pr-historical-mode-toggle">
             <span class="toggle-slider"></span>
           </label>
         </div>
 
         <div class="setting-row">
           <div class="setting-info">
-            <label for="include-file-diff-toggle">Include File Diffs</label>
+            <label for="pr-include-file-diff-toggle">Include File Diffs</label>
             <p class="setting-description">Include file diff patches in the export</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" id="include-file-diff-toggle">
+            <input type="checkbox" id="pr-include-file-diff-toggle">
             <span class="toggle-slider"></span>
           </label>
         </div>
 
         <div class="setting-row">
           <div class="setting-info">
-            <label for="include-commit-diff-toggle">Include Commit Diffs</label>
+            <label for="pr-include-commit-diff-toggle">Include Commit Diffs</label>
             <p class="setting-description">Include per-commit diff patches in the export</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" id="include-commit-diff-toggle">
+            <input type="checkbox" id="pr-include-commit-diff-toggle">
             <span class="toggle-slider"></span>
           </label>
         </div>
 
         <div class="setting-row">
           <div class="setting-info">
-            <label for="smart-diff-mode-toggle">Smart Diff Mode</label>
+            <label for="pr-smart-diff-mode-toggle">Smart Diff Mode</label>
             <p class="setting-description">Skip commit diffs that are fully reverted later in the PR</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" id="smart-diff-mode-toggle">
+            <input type="checkbox" id="pr-smart-diff-mode-toggle">
             <span class="toggle-slider"></span>
           </label>
         </div>
 
         <div class="setting-row">
           <div class="setting-info">
-            <label for="only-review-comments-toggle">Only Review Comments</label>
+            <label for="pr-only-review-comments-toggle">Only Review Comments</label>
             <p class="setting-description">PR only: export only inline review comments</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" id="only-review-comments-toggle">
+            <input type="checkbox" id="pr-only-review-comments-toggle">
             <span class="toggle-slider"></span>
           </label>
         </div>
 
         <div class="setting-row">
           <div class="setting-info">
-            <label for="ignore-resolved-comments-toggle">Ignore Resolved Comments</label>
+            <label for="pr-ignore-resolved-comments-toggle">Ignore Resolved Comments</label>
             <p class="setting-description">PR only: skip review comments in resolved threads</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" id="ignore-resolved-comments-toggle">
+            <input type="checkbox" id="pr-ignore-resolved-comments-toggle">
             <span class="toggle-slider"></span>
           </label>
         </div>
       </section>
 
       <section class="section">
-        <h2>Appearance</h2>
+        <h2>Issues</h2>
 
         <div class="setting-row">
           <div class="setting-info">
-            <label for="theme-select">Theme</label>
-            <p class="setting-description">Choose your preferred color scheme</p>
+            <label for="issue-enabled-toggle">Enable Extension</label>
+            <p class="setting-description">Turn extension features on or off for issues</p>
           </div>
-          <select id="theme-select" class="select">
+          <label class="toggle">
+            <input type="checkbox" id="issue-enabled-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="issue-notifications-toggle">Notifications</label>
+            <p class="setting-description">Show browser notifications for issue activity</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="issue-notifications-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="issue-theme-select">Theme</label>
+            <p class="setting-description">Choose color scheme for issue workflows</p>
+          </div>
+          <select id="issue-theme-select" class="select">
             <option value="system">System</option>
             <option value="light">Light</option>
             <option value="dark">Dark</option>
           </select>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="issue-historical-mode-toggle">Timeline Mode</label>
+            <p class="setting-description">Show comments in chronological order</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="issue-historical-mode-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="issue-smart-diff-mode-toggle">Smart Diff Mode</label>
+            <p class="setting-description">Store issue export smart diff preference</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="issue-smart-diff-mode-toggle">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
       </section>
 

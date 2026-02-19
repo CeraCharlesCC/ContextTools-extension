@@ -170,31 +170,33 @@ export function createSettingsDropdown(opts: DropdownOptions): DropdownResult {
     });
     dropdown.appendChild(historicalItem);
 
-    // Include file diff toggle
-    const fileDiffItem = document.createElement('label');
-    fileDiffItem.className = 'context-tools-dropdown-item';
-    fileDiffItem.innerHTML = `
+    if (opts.isPull) {
+        // Include file diff toggle
+        const fileDiffItem = document.createElement('label');
+        fileDiffItem.className = 'context-tools-dropdown-item';
+        fileDiffItem.innerHTML = `
     <span>Include file diffs</span>
     <input type="checkbox" id="context-tools-file-diff" ${opts.includeFileDiff ? 'checked' : ''}>
   `;
-    const fileDiffCheckbox = fileDiffItem.querySelector('input') as HTMLInputElement;
-    fileDiffCheckbox.addEventListener('change', () => {
-        opts.onIncludeFileDiffChange(fileDiffCheckbox.checked);
-    });
-    dropdown.appendChild(fileDiffItem);
+        const fileDiffCheckbox = fileDiffItem.querySelector('input') as HTMLInputElement;
+        fileDiffCheckbox.addEventListener('change', () => {
+            opts.onIncludeFileDiffChange(fileDiffCheckbox.checked);
+        });
+        dropdown.appendChild(fileDiffItem);
 
-    // Include commit diff toggle
-    const commitDiffItem = document.createElement('label');
-    commitDiffItem.className = 'context-tools-dropdown-item';
-    commitDiffItem.innerHTML = `
+        // Include commit diff toggle
+        const commitDiffItem = document.createElement('label');
+        commitDiffItem.className = 'context-tools-dropdown-item';
+        commitDiffItem.innerHTML = `
     <span>Include commit diffs</span>
     <input type="checkbox" id="context-tools-commit-diff" ${opts.includeCommit ? 'checked' : ''}>
   `;
-    const commitDiffCheckbox = commitDiffItem.querySelector('input') as HTMLInputElement;
-    commitDiffCheckbox.addEventListener('change', () => {
-        opts.onIncludeCommitChange(commitDiffCheckbox.checked);
-    });
-    dropdown.appendChild(commitDiffItem);
+        const commitDiffCheckbox = commitDiffItem.querySelector('input') as HTMLInputElement;
+        commitDiffCheckbox.addEventListener('change', () => {
+            opts.onIncludeCommitChange(commitDiffCheckbox.checked);
+        });
+        dropdown.appendChild(commitDiffItem);
+    }
 
     // Smart diff mode toggle
     const smartDiffItem = document.createElement('label');
@@ -209,37 +211,37 @@ export function createSettingsDropdown(opts: DropdownOptions): DropdownResult {
     });
     dropdown.appendChild(smartDiffItem);
 
-    // Only review comments mode toggle
-    const onlyReviewCommentsItem = document.createElement('label');
-    onlyReviewCommentsItem.className = 'context-tools-dropdown-item';
-    const onlyReviewCommentsSpan = document.createElement('span');
-    onlyReviewCommentsSpan.textContent = 'Only review comments (PR only)';
-    const onlyReviewCommentsCheckbox = document.createElement('input');
-    onlyReviewCommentsCheckbox.type = 'checkbox';
-    onlyReviewCommentsCheckbox.id = 'context-tools-only-review-comments';
-    onlyReviewCommentsCheckbox.checked = opts.onlyReviewComments;
-    onlyReviewCommentsCheckbox.disabled = !opts.isPull;
-    onlyReviewCommentsCheckbox.addEventListener('change', () => {
-        opts.onOnlyReviewCommentsChange(onlyReviewCommentsCheckbox.checked);
-    });
-    onlyReviewCommentsItem.append(onlyReviewCommentsSpan, onlyReviewCommentsCheckbox);
-    dropdown.appendChild(onlyReviewCommentsItem);
+    if (opts.isPull) {
+        // Only review comments mode toggle
+        const onlyReviewCommentsItem = document.createElement('label');
+        onlyReviewCommentsItem.className = 'context-tools-dropdown-item';
+        const onlyReviewCommentsSpan = document.createElement('span');
+        onlyReviewCommentsSpan.textContent = 'Only review comments (PR only)';
+        const onlyReviewCommentsCheckbox = document.createElement('input');
+        onlyReviewCommentsCheckbox.type = 'checkbox';
+        onlyReviewCommentsCheckbox.id = 'context-tools-only-review-comments';
+        onlyReviewCommentsCheckbox.checked = opts.onlyReviewComments;
+        onlyReviewCommentsCheckbox.addEventListener('change', () => {
+            opts.onOnlyReviewCommentsChange(onlyReviewCommentsCheckbox.checked);
+        });
+        onlyReviewCommentsItem.append(onlyReviewCommentsSpan, onlyReviewCommentsCheckbox);
+        dropdown.appendChild(onlyReviewCommentsItem);
 
-    // Ignore resolved comments mode toggle
-    const ignoreResolvedCommentsItem = document.createElement('label');
-    ignoreResolvedCommentsItem.className = 'context-tools-dropdown-item';
-    const ignoreResolvedCommentsSpan = document.createElement('span');
-    ignoreResolvedCommentsSpan.textContent = 'Ignore resolved comments (PR only)';
-    const ignoreResolvedCommentsCheckbox = document.createElement('input');
-    ignoreResolvedCommentsCheckbox.type = 'checkbox';
-    ignoreResolvedCommentsCheckbox.id = 'context-tools-ignore-resolved-comments';
-    ignoreResolvedCommentsCheckbox.checked = opts.ignoreResolvedComments;
-    ignoreResolvedCommentsCheckbox.disabled = !opts.isPull;
-    ignoreResolvedCommentsCheckbox.addEventListener('change', () => {
-        opts.onIgnoreResolvedCommentsChange(ignoreResolvedCommentsCheckbox.checked);
-    });
-    ignoreResolvedCommentsItem.append(ignoreResolvedCommentsSpan, ignoreResolvedCommentsCheckbox);
-    dropdown.appendChild(ignoreResolvedCommentsItem);
+        // Ignore resolved comments mode toggle
+        const ignoreResolvedCommentsItem = document.createElement('label');
+        ignoreResolvedCommentsItem.className = 'context-tools-dropdown-item';
+        const ignoreResolvedCommentsSpan = document.createElement('span');
+        ignoreResolvedCommentsSpan.textContent = 'Ignore resolved comments (PR only)';
+        const ignoreResolvedCommentsCheckbox = document.createElement('input');
+        ignoreResolvedCommentsCheckbox.type = 'checkbox';
+        ignoreResolvedCommentsCheckbox.id = 'context-tools-ignore-resolved-comments';
+        ignoreResolvedCommentsCheckbox.checked = opts.ignoreResolvedComments;
+        ignoreResolvedCommentsCheckbox.addEventListener('change', () => {
+            opts.onIgnoreResolvedCommentsChange(ignoreResolvedCommentsCheckbox.checked);
+        });
+        ignoreResolvedCommentsItem.append(ignoreResolvedCommentsSpan, ignoreResolvedCommentsCheckbox);
+        dropdown.appendChild(ignoreResolvedCommentsItem);
+    }
 
     const divider = document.createElement('div');
     divider.className = 'context-tools-dropdown-divider';

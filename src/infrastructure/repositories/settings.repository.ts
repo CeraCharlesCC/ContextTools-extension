@@ -16,7 +16,17 @@ export class SettingsRepository implements SettingsRepositoryPort {
     const defaults = createDefaultSettings();
 
     if (stored && typeof stored === 'object') {
-      const merged = { ...defaults, ...stored };
+      const merged: Settings = {
+        pr: {
+          ...defaults.pr,
+          ...(stored.pr && typeof stored.pr === 'object' ? stored.pr : {}),
+        },
+        issue: {
+          ...defaults.issue,
+          ...(stored.issue && typeof stored.issue === 'object' ? stored.issue : {}),
+        },
+      };
+
       if (validateSettings(merged)) {
         if (!validateSettings(stored)) {
           await this.saveSettings(merged);

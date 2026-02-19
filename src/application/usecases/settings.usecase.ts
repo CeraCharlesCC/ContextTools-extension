@@ -1,4 +1,4 @@
-import type { Settings } from '@domain/entities';
+import type { Settings, SettingsUpdate } from '@domain/entities';
 import type { SettingsRepositoryPort } from '@application/ports';
 
 /**
@@ -18,9 +18,18 @@ export class GetSettingsUseCase {
 export class UpdateSettingsUseCase {
   constructor(private readonly settingsRepository: SettingsRepositoryPort) {}
 
-  async execute(settings: Partial<Settings>): Promise<Settings> {
+  async execute(settings: SettingsUpdate): Promise<Settings> {
     const current = await this.settingsRepository.getSettings();
-    const updated: Settings = { ...current, ...settings };
+    const updated: Settings = {
+      pr: {
+        ...current.pr,
+        ...(settings.pr ?? {}),
+      },
+      issue: {
+        ...current.issue,
+        ...(settings.issue ?? {}),
+      },
+    };
     await this.settingsRepository.saveSettings(updated);
     return updated;
   }

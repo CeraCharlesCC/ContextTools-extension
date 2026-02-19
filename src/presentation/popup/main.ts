@@ -7,7 +7,8 @@ import type { Settings } from '@domain/entities';
 const adapters = getBrowserAdapters();
 
 // DOM Elements
-const enabledToggle = document.getElementById('enabled-toggle') as HTMLInputElement;
+const prEnabledToggle = document.getElementById('pr-enabled-toggle') as HTMLInputElement;
+const issueEnabledToggle = document.getElementById('issue-enabled-toggle') as HTMLInputElement;
 const pageInfoEl = document.getElementById('page-info')!;
 const optionsBtn = document.getElementById('options-btn')!;
 
@@ -17,7 +18,8 @@ async function loadSettings(): Promise<void> {
     const settings = await adapters.messaging.sendMessage<{ type: string }, Settings>({
       type: 'GET_SETTINGS',
     });
-    enabledToggle.checked = settings.enabled;
+    prEnabledToggle.checked = settings.pr.enabled;
+    issueEnabledToggle.checked = settings.issue.enabled;
   } catch (error) {
     console.error('Failed to load settings:', error);
   }
@@ -46,15 +48,33 @@ async function loadPageInfo(): Promise<void> {
 }
 
 // Event handlers
-enabledToggle.addEventListener('change', async () => {
+prEnabledToggle.addEventListener('change', async () => {
   try {
+    const enabled = prEnabledToggle.checked;
     await adapters.messaging.sendMessage({
       type: 'UPDATE_SETTINGS',
-      payload: { enabled: enabledToggle.checked },
+      payload: {
+        pr: { enabled },
+      },
     });
   } catch (error) {
     console.error('Failed to update settings:', error);
-    enabledToggle.checked = !enabledToggle.checked;
+    prEnabledToggle.checked = !prEnabledToggle.checked;
+  }
+});
+
+issueEnabledToggle.addEventListener('change', async () => {
+  try {
+    const enabled = issueEnabledToggle.checked;
+    await adapters.messaging.sendMessage({
+      type: 'UPDATE_SETTINGS',
+      payload: {
+        issue: { enabled },
+      },
+    });
+  } catch (error) {
+    console.error('Failed to update settings:', error);
+    issueEnabledToggle.checked = !issueEnabledToggle.checked;
   }
 });
 

@@ -37,6 +37,8 @@ let resetMarkersButton: HTMLButtonElement | null = null;
 let lastMarkerCandidate: Marker | null = null;
 let isEnabled = true;
 let isCopying = false;
+let prEnabled = true;
+let issueEnabled = true;
 
 // Temporary export settings (overrides for current copy operation)
 let tempHistoricalMode: boolean | null = null;
@@ -45,12 +47,14 @@ let tempIncludeCommit: boolean | null = null;
 let tempSmartDiffMode: boolean | null = null;
 let tempOnlyReviewComments: boolean | null = null;
 let tempIgnoreResolvedComments: boolean | null = null;
-let defaultHistoricalMode = true;
-let defaultIncludeFileDiff = false;
-let defaultIncludeCommit = false;
-let defaultSmartDiffMode = false;
-let defaultOnlyReviewComments = false;
-let defaultIgnoreResolvedComments = false;
+let defaultPrHistoricalMode = true;
+let defaultPrIncludeFileDiff = false;
+let defaultPrIncludeCommit = false;
+let defaultPrSmartDiffMode = false;
+let defaultPrOnlyReviewComments = false;
+let defaultPrIgnoreResolvedComments = false;
+let defaultIssueHistoricalMode = true;
+let defaultIssueSmartDiffMode = false;
 
 // Observer state for throttling and cleanup
 let pageObserver: MutationObserver | null = null;
@@ -87,6 +91,33 @@ function resetMarkerRange(): void {
   showToast('Markers cleared.');
 }
 
+function resolveDefaultExportOptions() {
+  if (currentPage?.kind === 'pull') {
+    return {
+      historicalMode: defaultPrHistoricalMode,
+      includeFileDiff: defaultPrIncludeFileDiff,
+      includeCommit: defaultPrIncludeCommit,
+      smartDiffMode: defaultPrSmartDiffMode,
+      onlyReviewComments: defaultPrOnlyReviewComments,
+      ignoreResolvedComments: defaultPrIgnoreResolvedComments,
+    };
+  }
+
+  return {
+    historicalMode: defaultIssueHistoricalMode,
+    includeFileDiff: false,
+    includeCommit: false,
+    smartDiffMode: defaultIssueSmartDiffMode,
+    onlyReviewComments: false,
+    ignoreResolvedComments: false,
+  };
+}
+
+function resolveCurrentPageEnabled(): boolean {
+  if (!currentPage) return false;
+  return currentPage.kind === 'pull' ? prEnabled : issueEnabled;
+}
+
 async function handleCopyClick(): Promise<void> {
   if (isCopying || !currentPage) return;
 
@@ -96,12 +127,32 @@ async function handleCopyClick(): Promise<void> {
   }
 
   // Use temporary overrides if set, otherwise use defaults
-  const historicalMode = tempHistoricalMode ?? defaultHistoricalMode;
-  const includeFiles = tempIncludeFileDiff ?? defaultIncludeFileDiff;
-  const includeCommit = tempIncludeCommit ?? defaultIncludeCommit;
-  const smartDiffMode = tempSmartDiffMode ?? defaultSmartDiffMode;
-  const onlyReviewComments = tempOnlyReviewComments ?? defaultOnlyReviewComments;
-  const ignoreResolvedComments = tempIgnoreResolvedComments ?? defaultIgnoreResolvedComments;
+  const defaults = resolveDefaultExportOptions();
+  const historicalMode = tempHistoricalMode ?? defaults.historicalMode;
+  const smartDiffMode = tempSmartDiffMode ?? defaults.smartDiffMode;
+
+  const payload: {
+    page: PageRef;
+    range?: MarkerRange;
+    historicalMode?: boolean;
+    includeFiles?: boolean;
+    includeCommit?: boolean;
+    smartDiffMode?: boolean;
+    onlyReviewComments?: boolean;
+    ignoreResolvedComments?: boolean;
+  } = {
+    page: currentPage,
+    range: markerRange,
+    historicalMode,
+    smartDiffMode,
+  };
+
+  if (currentPage.kind === 'pull') {
+    payload.includeFiles = tempIncludeFileDiff ?? defaults.includeFileDiff;
+    payload.includeCommit = tempIncludeCommit ?? defaults.includeCommit;
+    payload.onlyReviewComments = tempOnlyReviewComments ?? defaults.onlyReviewComments;
+    payload.ignoreResolvedComments = tempIgnoreResolvedComments ?? defaults.ignoreResolvedComments;
+  }
 
   try {
     const result = await adapters.messaging.sendMessage<{
@@ -118,16 +169,7 @@ async function handleCopyClick(): Promise<void> {
       };
     }, GenerateMarkdownResult>({
       type: 'GENERATE_MARKDOWN',
-      payload: {
-        page: currentPage,
-        range: markerRange,
-        historicalMode,
-        includeFiles,
-        includeCommit,
-        smartDiffMode,
-        onlyReviewComments,
-        ignoreResolvedComments,
-      },
+      payload,
     });
 
     if (!result?.ok) {
@@ -151,14 +193,17 @@ async function handleCopyClick(): Promise<void> {
 }
 
 function buildDropdownOptions(): DropdownOptions {
+  const isPull = currentPage?.kind === 'pull';
+  const defaults = resolveDefaultExportOptions();
+
   return {
-    isPull: currentPage?.kind === 'pull',
-    historicalMode: tempHistoricalMode ?? defaultHistoricalMode,
-    includeFileDiff: tempIncludeFileDiff ?? defaultIncludeFileDiff,
-    includeCommit: tempIncludeCommit ?? defaultIncludeCommit,
-    smartDiffMode: tempSmartDiffMode ?? defaultSmartDiffMode,
-    onlyReviewComments: tempOnlyReviewComments ?? defaultOnlyReviewComments,
-    ignoreResolvedComments: tempIgnoreResolvedComments ?? defaultIgnoreResolvedComments,
+    isPull,
+    historicalMode: tempHistoricalMode ?? defaults.historicalMode,
+    includeFileDiff: isPull ? tempIncludeFileDiff ?? defaults.includeFileDiff : false,
+    includeCommit: isPull ? tempIncludeCommit ?? defaults.includeCommit : false,
+    smartDiffMode: tempSmartDiffMode ?? defaults.smartDiffMode,
+    onlyReviewComments: isPull ? tempOnlyReviewComments ?? defaults.onlyReviewComments : false,
+    ignoreResolvedComments: isPull ? tempIgnoreResolvedComments ?? defaults.ignoreResolvedComments : false,
     onHistoricalModeChange: (checked) => { tempHistoricalMode = checked; },
     onIncludeFileDiffChange: (checked) => { tempIncludeFileDiff = checked; },
     onIncludeCommitChange: (checked) => { tempIncludeCommit = checked; },
@@ -338,7 +383,7 @@ function handlePageChange(): void {
   settingsDropdown = null;
   resetMarkersButton = null;
 
-  if (!currentPage) {
+  if (!currentPage || !resolveCurrentPageEnabled()) {
     const existing = document.querySelector(COPY_BUTTON_SELECTOR);
     if (existing) {
       existing.remove();
@@ -360,15 +405,19 @@ async function init(): Promise<void> {
     const settings = await adapters.messaging.sendMessage<{ type: string }, Settings>({
       type: 'GET_SETTINGS',
     });
-    isEnabled = settings?.enabled ?? true;
+    prEnabled = settings?.pr.enabled ?? true;
+    issueEnabled = settings?.issue.enabled ?? true;
+    isEnabled = prEnabled || issueEnabled;
     if (!isEnabled) return;
     // Load markdown export defaults from settings
-    defaultHistoricalMode = settings?.historicalMode ?? true;
-    defaultIncludeFileDiff = settings?.includeFileDiff ?? false;
-    defaultIncludeCommit = settings?.includeCommit ?? false;
-    defaultSmartDiffMode = settings?.smartDiffMode ?? false;
-    defaultOnlyReviewComments = settings?.onlyReviewComments ?? false;
-    defaultIgnoreResolvedComments = settings?.ignoreResolvedComments ?? false;
+    defaultPrHistoricalMode = settings?.pr.historicalMode ?? true;
+    defaultPrIncludeFileDiff = settings?.pr.includeFileDiff ?? false;
+    defaultPrIncludeCommit = settings?.pr.includeCommit ?? false;
+    defaultPrSmartDiffMode = settings?.pr.smartDiffMode ?? false;
+    defaultPrOnlyReviewComments = settings?.pr.onlyReviewComments ?? false;
+    defaultPrIgnoreResolvedComments = settings?.pr.ignoreResolvedComments ?? false;
+    defaultIssueHistoricalMode = settings?.issue.historicalMode ?? true;
+    defaultIssueSmartDiffMode = settings?.issue.smartDiffMode ?? false;
   } catch {
     // Default to enabled if settings are unavailable.
   }
