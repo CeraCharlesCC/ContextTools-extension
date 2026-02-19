@@ -92,6 +92,11 @@ jobs:
         with:
           subject-path: release/context-tools-firefox-v${{ steps.release_meta.outputs.version }}.zip
 
+      - name: Prepare attestation assets
+        run: |
+          cp "${{ steps.attest_chrome.outputs.bundle-path }}" "release/context-tools-chrome-v${{ steps.release_meta.outputs.version }}-attestation.json"
+          cp "${{ steps.attest_firefox.outputs.bundle-path }}" "release/context-tools-firefox-v${{ steps.release_meta.outputs.version }}-attestation.json"
+
       - name: Create GitHub release and upload assets
         uses: softprops/action-gh-release@v2
         with:
@@ -103,5 +108,5 @@ jobs:
           files: |
             release/context-tools-chrome-v${{ steps.release_meta.outputs.version }}.zip
             release/context-tools-firefox-v${{ steps.release_meta.outputs.version }}.zip
-            ${{ steps.attest_chrome.outputs.bundle-path }}
-            ${{ steps.attest_firefox.outputs.bundle-path }}
+            release/context-tools-chrome-v${{ steps.release_meta.outputs.version }}-attestation.json
+            release/context-tools-firefox-v${{ steps.release_meta.outputs.version }}-attestation.json
