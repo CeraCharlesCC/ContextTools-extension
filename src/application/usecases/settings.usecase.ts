@@ -21,6 +21,10 @@ export class UpdateSettingsUseCase {
   async execute(settings: SettingsUpdate): Promise<Settings> {
     const current = await this.settingsRepository.getSettings();
     const updated: Settings = {
+      commonSettings: {
+        ...current.commonSettings,
+        ...(settings.commonSettings ?? {}),
+      },
       pr: {
         ...current.pr,
         ...(settings.pr ?? {}),

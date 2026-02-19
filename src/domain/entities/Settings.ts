@@ -2,13 +2,13 @@
  * Domain Entity: Settings
  * Pure business object - no browser dependencies
  */
-export interface BaseSettings {
-  readonly enabled: boolean;
+export interface CommonSettings {
   readonly theme: 'light' | 'dark' | 'system';
   readonly notifications: boolean;
 }
 
-export interface PRSettings extends BaseSettings {
+export interface PRSettings {
+  readonly enabled: boolean;
   readonly historicalMode: boolean;
   readonly includeFileDiff: boolean;
   readonly includeCommit: boolean;
@@ -17,31 +17,33 @@ export interface PRSettings extends BaseSettings {
   readonly ignoreResolvedComments: boolean;
 }
 
-export interface IssueSettings extends BaseSettings {
+export interface IssueSettings {
+  readonly enabled: boolean;
   readonly historicalMode: boolean;
-  readonly smartDiffMode: boolean;
 }
 
 export interface Settings {
+  readonly commonSettings: CommonSettings;
   readonly pr: PRSettings;
   readonly issue: IssueSettings;
 }
 
 export interface SettingsUpdate {
+  readonly commonSettings?: Partial<CommonSettings>;
   readonly pr?: Partial<PRSettings>;
   readonly issue?: Partial<IssueSettings>;
 }
 
-const defaultBaseSettings: BaseSettings = {
-  enabled: true,
+const defaultCommonSettings: CommonSettings = {
   theme: 'system',
   notifications: true,
 };
 
 export function createDefaultSettings(): Settings {
   return {
+    commonSettings: { ...defaultCommonSettings },
     pr: {
-      ...defaultBaseSettings,
+      enabled: true,
       historicalMode: true,
       includeFileDiff: false,
       includeCommit: false,
@@ -50,16 +52,14 @@ export function createDefaultSettings(): Settings {
       ignoreResolvedComments: false,
     },
     issue: {
-      ...defaultBaseSettings,
+      enabled: true,
       historicalMode: true,
-      smartDiffMode: false,
     },
   };
 }
 
-function validateBaseSettings(settings: Partial<BaseSettings>): boolean {
+function validateCommonSettings(settings: Partial<CommonSettings>): boolean {
   return (
-    typeof settings.enabled === 'boolean' &&
     ['light', 'dark', 'system'].includes(settings.theme ?? '') &&
     typeof settings.notifications === 'boolean'
   );
@@ -67,7 +67,7 @@ function validateBaseSettings(settings: Partial<BaseSettings>): boolean {
 
 function validatePRSettings(settings: Partial<PRSettings>): settings is PRSettings {
   return (
-    validateBaseSettings(settings) &&
+    typeof settings.enabled === 'boolean' &&
     typeof settings.historicalMode === 'boolean' &&
     typeof settings.includeFileDiff === 'boolean' &&
     typeof settings.includeCommit === 'boolean' &&
@@ -78,14 +78,14 @@ function validatePRSettings(settings: Partial<PRSettings>): settings is PRSettin
 }
 
 function validateIssueSettings(settings: Partial<IssueSettings>): settings is IssueSettings {
-  return (
-    validateBaseSettings(settings) &&
-    typeof settings.historicalMode === 'boolean' &&
-    typeof settings.smartDiffMode === 'boolean'
-  );
+  return typeof settings.enabled === 'boolean' && typeof settings.historicalMode === 'boolean';
 }
 
 export function validateSettings(settings: Partial<Settings>): settings is Settings {
+  if (!settings.commonSettings || typeof settings.commonSettings !== 'object') {
+    return false;
+  }
+
   if (!settings.pr || typeof settings.pr !== 'object') {
     return false;
   }
@@ -94,5 +94,9 @@ export function validateSettings(settings: Partial<Settings>): settings is Setti
     return false;
   }
 
-  return validatePRSettings(settings.pr) && validateIssueSettings(settings.issue);
+  return (
+    validateCommonSettings(settings.commonSettings) &&
+    validatePRSettings(settings.pr) &&
+    validateIssueSettings(settings.issue)
+  );
 }

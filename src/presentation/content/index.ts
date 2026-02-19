@@ -59,7 +59,6 @@ type PrExportDefaults = {
 
 type IssueExportDefaults = {
   historicalMode: boolean;
-  smartDiffMode: boolean;
 };
 
 let defaultPrSettings: PrExportDefaults = {
@@ -73,7 +72,6 @@ let defaultPrSettings: PrExportDefaults = {
 
 let defaultIssueSettings: IssueExportDefaults = {
   historicalMode: true,
-  smartDiffMode: false,
 };
 
 // Observer state for throttling and cleanup
@@ -120,7 +118,7 @@ function resolveDefaultExportOptions() {
     historicalMode: defaultIssueSettings.historicalMode,
     includeFileDiff: false,
     includeCommit: false,
-    smartDiffMode: defaultIssueSettings.smartDiffMode,
+    smartDiffMode: false,
     onlyReviewComments: false,
     ignoreResolvedComments: false,
   };
@@ -157,12 +155,12 @@ async function handleCopyClick(): Promise<void> {
     page: currentPage,
     range: markerRange,
     historicalMode,
-    smartDiffMode,
   };
 
   if (currentPage.kind === 'pull') {
     payload.includeFiles = tempIncludeFileDiff ?? defaults.includeFileDiff;
     payload.includeCommit = tempIncludeCommit ?? defaults.includeCommit;
+    payload.smartDiffMode = smartDiffMode;
     payload.onlyReviewComments = tempOnlyReviewComments ?? defaults.onlyReviewComments;
     payload.ignoreResolvedComments = tempIgnoreResolvedComments ?? defaults.ignoreResolvedComments;
   }
@@ -433,7 +431,6 @@ async function init(): Promise<void> {
     };
     defaultIssueSettings = {
       historicalMode: settings?.issue.historicalMode ?? true,
-      smartDiffMode: settings?.issue.smartDiffMode ?? false,
     };
   } catch {
     // Default to enabled if settings are unavailable.

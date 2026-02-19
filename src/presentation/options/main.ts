@@ -7,9 +7,9 @@ import type { Settings, SettingsUpdate } from '@domain/entities';
 const adapters = getBrowserAdapters();
 
 // DOM Elements
+const commonNotificationsToggle = document.getElementById('common-notifications-toggle') as HTMLInputElement;
+const commonThemeSelect = document.getElementById('common-theme-select') as HTMLSelectElement;
 const prEnabledToggle = document.getElementById('pr-enabled-toggle') as HTMLInputElement;
-const prNotificationsToggle = document.getElementById('pr-notifications-toggle') as HTMLInputElement;
-const prThemeSelect = document.getElementById('pr-theme-select') as HTMLSelectElement;
 const prHistoricalModeToggle = document.getElementById('pr-historical-mode-toggle') as HTMLInputElement;
 const prIncludeFileDiffToggle = document.getElementById('pr-include-file-diff-toggle') as HTMLInputElement;
 const prIncludeCommitDiffToggle = document.getElementById('pr-include-commit-diff-toggle') as HTMLInputElement;
@@ -17,10 +17,7 @@ const prSmartDiffModeToggle = document.getElementById('pr-smart-diff-mode-toggle
 const prOnlyReviewCommentsToggle = document.getElementById('pr-only-review-comments-toggle') as HTMLInputElement;
 const prIgnoreResolvedCommentsToggle = document.getElementById('pr-ignore-resolved-comments-toggle') as HTMLInputElement;
 const issueEnabledToggle = document.getElementById('issue-enabled-toggle') as HTMLInputElement;
-const issueNotificationsToggle = document.getElementById('issue-notifications-toggle') as HTMLInputElement;
-const issueThemeSelect = document.getElementById('issue-theme-select') as HTMLSelectElement;
 const issueHistoricalModeToggle = document.getElementById('issue-historical-mode-toggle') as HTMLInputElement;
-const issueSmartDiffModeToggle = document.getElementById('issue-smart-diff-mode-toggle') as HTMLInputElement;
 const githubTokenInput = document.getElementById('github-token') as HTMLInputElement;
 const githubTokenToggle = document.getElementById('github-token-toggle') as HTMLButtonElement;
 const versionEl = document.getElementById('version')!;
@@ -44,10 +41,10 @@ async function loadSettings(): Promise<void> {
       type: 'GET_SETTINGS',
     });
 
-    prEnabledToggle.checked = settings.pr.enabled;
-    prNotificationsToggle.checked = settings.pr.notifications;
-    prThemeSelect.value = settings.pr.theme;
+    commonNotificationsToggle.checked = settings.commonSettings.notifications;
+    commonThemeSelect.value = settings.commonSettings.theme;
 
+    prEnabledToggle.checked = settings.pr.enabled;
     prHistoricalModeToggle.checked = settings.pr.historicalMode;
     prIncludeFileDiffToggle.checked = settings.pr.includeFileDiff;
     prIncludeCommitDiffToggle.checked = settings.pr.includeCommit;
@@ -56,10 +53,7 @@ async function loadSettings(): Promise<void> {
     prIgnoreResolvedCommentsToggle.checked = settings.pr.ignoreResolvedComments;
 
     issueEnabledToggle.checked = settings.issue.enabled;
-    issueNotificationsToggle.checked = settings.issue.notifications;
-    issueThemeSelect.value = settings.issue.theme;
     issueHistoricalModeToggle.checked = settings.issue.historicalMode;
-    issueSmartDiffModeToggle.checked = settings.issue.smartDiffMode;
   } catch (error) {
     console.error('Failed to load settings:', error);
     showStatus('Failed to load settings', 'error');
@@ -105,9 +99,9 @@ async function updateToken(token: string): Promise<void> {
   }
 }
 
+type CommonBooleanSettingKey = 'notifications';
 type PrBooleanSettingKey =
   | 'enabled'
-  | 'notifications'
   | 'historicalMode'
   | 'includeFileDiff'
   | 'includeCommit'
@@ -115,7 +109,15 @@ type PrBooleanSettingKey =
   | 'onlyReviewComments'
   | 'ignoreResolvedComments';
 
-type IssueBooleanSettingKey = 'enabled' | 'notifications' | 'historicalMode' | 'smartDiffMode';
+type IssueBooleanSettingKey = 'enabled' | 'historicalMode';
+
+function bindCommonBooleanSetting(element: HTMLInputElement, key: CommonBooleanSettingKey): void {
+  element.addEventListener('change', () => {
+    updateSettings({
+      commonSettings: { [key]: element.checked } as Partial<Settings['commonSettings']>,
+    });
+  });
+}
 
 function bindPrBooleanSetting(element: HTMLInputElement, key: PrBooleanSettingKey): void {
   element.addEventListener('change', () => {
@@ -133,29 +135,19 @@ function bindIssueBooleanSetting(element: HTMLInputElement, key: IssueBooleanSet
   });
 }
 
-function bindPrThemeSetting(element: HTMLSelectElement): void {
+function bindCommonThemeSetting(element: HTMLSelectElement): void {
   element.addEventListener('change', () => {
     updateSettings({
-      pr: { theme: element.value as Settings['pr']['theme'] },
-    });
-  });
-}
-
-function bindIssueThemeSetting(element: HTMLSelectElement): void {
-  element.addEventListener('change', () => {
-    updateSettings({
-      issue: { theme: element.value as Settings['issue']['theme'] },
+      commonSettings: { theme: element.value as Settings['commonSettings']['theme'] },
     });
   });
 }
 
 // Event handlers
+bindCommonBooleanSetting(commonNotificationsToggle, 'notifications');
+bindCommonThemeSetting(commonThemeSelect);
 bindPrBooleanSetting(prEnabledToggle, 'enabled');
-bindPrBooleanSetting(prNotificationsToggle, 'notifications');
-bindPrThemeSetting(prThemeSelect);
 bindIssueBooleanSetting(issueEnabledToggle, 'enabled');
-bindIssueBooleanSetting(issueNotificationsToggle, 'notifications');
-bindIssueThemeSetting(issueThemeSelect);
 bindPrBooleanSetting(prHistoricalModeToggle, 'historicalMode');
 bindPrBooleanSetting(prIncludeFileDiffToggle, 'includeFileDiff');
 bindPrBooleanSetting(prIncludeCommitDiffToggle, 'includeCommit');
@@ -163,7 +155,6 @@ bindPrBooleanSetting(prSmartDiffModeToggle, 'smartDiffMode');
 bindPrBooleanSetting(prOnlyReviewCommentsToggle, 'onlyReviewComments');
 bindPrBooleanSetting(prIgnoreResolvedCommentsToggle, 'ignoreResolvedComments');
 bindIssueBooleanSetting(issueHistoricalModeToggle, 'historicalMode');
-bindIssueBooleanSetting(issueSmartDiffModeToggle, 'smartDiffMode');
 
 githubTokenToggle.addEventListener('click', () => {
   const isHidden = githubTokenInput.type === 'password';

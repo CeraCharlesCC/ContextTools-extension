@@ -32,6 +32,33 @@
       </section>
 
       <section class="section">
+        <h2>Common</h2>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="common-notifications-toggle">Notifications</label>
+            <p class="setting-description">Show browser notifications</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="common-notifications-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="common-theme-select">Theme</label>
+            <p class="setting-description">Choose your preferred color scheme</p>
+          </div>
+          <select id="common-theme-select" class="select">
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="section">
         <h2>Pull Requests</h2>
 
         <div class="setting-row">
@@ -43,29 +70,6 @@
             <input type="checkbox" id="pr-enabled-toggle">
             <span class="toggle-slider"></span>
           </label>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-info">
-            <label for="pr-notifications-toggle">Notifications</label>
-            <p class="setting-description">Show browser notifications for pull request activity</p>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="pr-notifications-toggle">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-info">
-            <label for="pr-theme-select">Theme</label>
-            <p class="setting-description">Choose color scheme for pull request workflows</p>
-          </div>
-          <select id="pr-theme-select" class="select">
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
         </div>
 
         <div class="setting-row">
@@ -151,29 +155,6 @@
 
         <div class="setting-row">
           <div class="setting-info">
-            <label for="issue-notifications-toggle">Notifications</label>
-            <p class="setting-description">Show browser notifications for issue activity</p>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="issue-notifications-toggle">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-info">
-            <label for="issue-theme-select">Theme</label>
-            <p class="setting-description">Choose color scheme for issue workflows</p>
-          </div>
-          <select id="issue-theme-select" class="select">
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-info">
             <label for="issue-historical-mode-toggle">Timeline Mode</label>
             <p class="setting-description">Show comments in chronological order</p>
           </div>
@@ -183,16 +164,6 @@
           </label>
         </div>
 
-        <div class="setting-row">
-          <div class="setting-info">
-            <label for="issue-smart-diff-mode-toggle">Smart Diff Mode</label>
-            <p class="setting-description">Store issue export smart diff preference</p>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="issue-smart-diff-mode-toggle">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
       </section>
 
       <section class="section">

@@ -198,20 +198,20 @@ export function createSettingsDropdown(opts: DropdownOptions): DropdownResult {
         dropdown.appendChild(commitDiffItem);
     }
 
-    // Smart diff mode toggle
-    const smartDiffItem = document.createElement('label');
-    smartDiffItem.className = 'context-tools-dropdown-item';
-    smartDiffItem.innerHTML = `
+    if (opts.isPull) {
+        // Smart diff mode toggle
+        const smartDiffItem = document.createElement('label');
+        smartDiffItem.className = 'context-tools-dropdown-item';
+        smartDiffItem.innerHTML = `
     <span>Smart diff mode</span>
     <input type="checkbox" id="context-tools-smart-diff" ${opts.smartDiffMode ? 'checked' : ''}>
   `;
-    const smartDiffCheckbox = smartDiffItem.querySelector('input') as HTMLInputElement;
-    smartDiffCheckbox.addEventListener('change', () => {
-        opts.onSmartDiffModeChange(smartDiffCheckbox.checked);
-    });
-    dropdown.appendChild(smartDiffItem);
+        const smartDiffCheckbox = smartDiffItem.querySelector('input') as HTMLInputElement;
+        smartDiffCheckbox.addEventListener('change', () => {
+            opts.onSmartDiffModeChange(smartDiffCheckbox.checked);
+        });
+        dropdown.appendChild(smartDiffItem);
 
-    if (opts.isPull) {
         // Only review comments mode toggle
         const onlyReviewCommentsItem = document.createElement('label');
         onlyReviewCommentsItem.className = 'context-tools-dropdown-item';

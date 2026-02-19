@@ -10,8 +10,14 @@ function renderAssignees(assignees: Array<{ login?: string }> | null | undefined
   return assignees.map(formatUser).join(', ');
 }
 
-export function issueToMarkdown(issue: any, comments: any[]): string {
+export function issueToMarkdown(
+  issue: any,
+  comments: any[],
+  options?: { historicalMode?: boolean }
+): string {
   const lines: string[] = [];
+  const orderedComments =
+    options?.historicalMode === false ? [...(comments ?? [])].reverse() : (comments ?? []);
 
   lines.push(`# Issue: ${issue.title}`);
   lines.push('');
@@ -32,10 +38,10 @@ export function issueToMarkdown(issue: any, comments: any[]): string {
   lines.push('## Description');
   lines.push(issue.body?.trim() ? issue.body.trim() : '_No description provided._');
 
-  if (comments?.length) {
+  if (orderedComments.length) {
     lines.push('');
-    lines.push(`## Comments (${comments.length})`);
-    comments.forEach((comment, index) => {
+    lines.push(`## Comments (${orderedComments.length})`);
+    orderedComments.forEach((comment, index) => {
       lines.push('');
       lines.push(`### ${index + 1}. ${formatUser(comment.user)} on ${formatDate(comment.created_at)}`);
       lines.push(comment.body?.trim() ? comment.body.trim() : '_No comment body._');

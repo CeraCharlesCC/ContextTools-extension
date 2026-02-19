@@ -198,9 +198,12 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
 
   // Get settings defaults if options not explicitly provided
   const settings = await getSettingsUseCase.execute();
-  const roleSettings = payload.page.kind === 'pull' ? settings.pr : settings.issue;
-  const historicalMode = payload.historicalMode ?? roleSettings.historicalMode;
-  const smartDiffMode = payload.smartDiffMode ?? roleSettings.smartDiffMode;
+  const historicalMode = payload.page.kind === 'pull'
+    ? payload.historicalMode ?? settings.pr.historicalMode
+    : payload.historicalMode ?? settings.issue.historicalMode;
+  const smartDiffMode = payload.page.kind === 'pull'
+    ? payload.smartDiffMode ?? settings.pr.smartDiffMode
+    : false;
   const includeFiles = payload.page.kind === 'pull'
     ? payload.includeFiles ?? settings.pr.includeFileDiff
     : false;
@@ -226,7 +229,7 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
     }
     return {
       ok: true,
-      markdown: issueToMarkdown(issue, sliceResult.comments),
+      markdown: issueToMarkdown(issue, sliceResult.comments, { historicalMode }),
       warning: sliceResult.warning,
     };
   }
