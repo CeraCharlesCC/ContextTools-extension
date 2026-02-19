@@ -13,7 +13,7 @@
     "sync:versions": "node scripts/sync-versions.mjs",
     "sync:versions:check": "node scripts/sync-versions.mjs --check",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts,.tsx",
+    "lint": "eslint src",
     "clean": "rimraf dist dist-chrome dist-firefox"
   },
   "devDependencies": {

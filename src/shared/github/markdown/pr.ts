@@ -1,10 +1,18 @@
 import { formatDate, formatUser } from '../format';
+import type {
+  GitHubCommit,
+  GitHubIssueComment,
+  GitHubPullFile,
+  GitHubPullRequest,
+  GitHubPullReview,
+  GitHubPullReviewComment,
+} from '../types';
 
 export type TimelineEvent =
-  | { type: 'commit'; date?: string; commit: any }
-  | { type: 'issue-comment'; date: string; comment: any; id: number }
-  | { type: 'review-comment'; date: string; comment: any; id: number }
-  | { type: 'review'; date?: string; review: any; id: number };
+  | { type: 'commit'; date?: string; commit: GitHubCommit }
+  | { type: 'issue-comment'; date: string; comment: GitHubIssueComment; id: number }
+  | { type: 'review-comment'; date: string; comment: GitHubPullReviewComment; id: number }
+  | { type: 'review'; date?: string; review: GitHubPullReview; id: number };
 
 function renderLabels(labels: Array<{ name?: string }> | null | undefined): string {
   if (!labels || !labels.length) return 'None';
@@ -15,11 +23,11 @@ function renderBody(lines: string[], body: string | null | undefined, fallback: 
   lines.push(body?.trim() ? body.trim() : fallback);
 }
 
-function renderFileDiff(lines: string[], file: any, heading: string): void {
+function renderFileDiff(lines: string[], file: GitHubPullFile, heading: string): void {
   const additions = typeof file.additions === 'number' ? file.additions : 0;
   const deletions = typeof file.deletions === 'number' ? file.deletions : 0;
   const status = file.status || 'modified';
-  lines.push(`${heading} ${file.filename} (${status}, +${additions} -${deletions})`);
+  lines.push(`${heading} ${file.filename ?? 'unknown file'} (${status}, +${additions} -${deletions})`);
   if (file.patch) {
     lines.push('```diff');
     lines.push(file.patch);
@@ -29,7 +37,7 @@ function renderFileDiff(lines: string[], file: any, heading: string): void {
   }
 }
 
-function formatCommitAuthor(commit: any): string {
+function formatCommitAuthor(commit: GitHubCommit): string {
   if (commit?.author?.login) {
     return formatUser(commit.author);
   }
@@ -48,7 +56,13 @@ function commitBody(message: string): string {
   return body;
 }
 
-function renderCommitEntry(lines: string[], commit: any, index: number, date: string | undefined, options: { heading: string; diffHeading: string; includeFiles?: boolean }): void {
+function renderCommitEntry(
+  lines: string[],
+  commit: GitHubCommit,
+  index: number,
+  date: string | undefined,
+  options: { heading: string; diffHeading: string; includeFiles?: boolean }
+): void {
   const sha = commit?.sha ? commit.sha.slice(0, 7) : 'unknown';
   const message = commit?.commit?.message || '';
   const subject = commitSubject(message);
@@ -60,7 +74,7 @@ function renderCommitEntry(lines: string[], commit: any, index: number, date: st
     lines.push(body);
   }
   if (options.includeFiles && commit?.files?.length) {
-    commit.files.forEach((file: any) => {
+    commit.files.forEach((file) => {
       lines.push('');
       renderFileDiff(lines, file, options.diffHeading);
     });
@@ -79,10 +93,10 @@ function normalizeEvents(events: TimelineEvent[]): Array<TimelineEvent & { index
 }
 
 export function buildTimelineEvents(input: {
-  commits?: any[];
-  issueComments?: any[];
-  reviewComments?: any[];
-  reviews?: any[];
+  commits?: GitHubCommit[];
+  issueComments?: GitHubIssueComment[];
+  reviewComments?: GitHubPullReviewComment[];
+  reviews?: GitHubPullReview[];
 }): TimelineEvent[] {
   const events: TimelineEvent[] = [];
 
@@ -175,7 +189,7 @@ export function renderTimelineSection(
   });
 }
 
-function renderReviewCommentsSection(lines: string[], reviewComments?: any[]): void {
+function renderReviewCommentsSection(lines: string[], reviewComments?: GitHubPullReviewComment[]): void {
   if (!reviewComments?.length) return;
   lines.push('');
   lines.push(`## Review Comments (${reviewComments.length})`);
@@ -193,12 +207,12 @@ function renderReviewCommentsSection(lines: string[], reviewComments?: any[]): v
 }
 
 export function prToMarkdown(input: {
-  pr: any;
-  files?: any[];
-  issueComments?: any[];
-  reviewComments?: any[];
-  reviews?: any[];
-  commits?: any[];
+  pr: GitHubPullRequest;
+  files?: GitHubPullFile[];
+  issueComments?: GitHubIssueComment[];
+  reviewComments?: GitHubPullReviewComment[];
+  reviews?: GitHubPullReview[];
+  commits?: GitHubCommit[];
   historicalMode?: boolean;
   includeFiles?: boolean;
   includeCommit?: boolean;
