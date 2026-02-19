@@ -1,3 +1,13 @@
+import type {
+  GitHubCommit,
+  GitHubIssue,
+  GitHubIssueComment,
+  GitHubPullFile,
+  GitHubPullRequest,
+  GitHubPullReview,
+  GitHubPullReviewComment,
+} from './types';
+
 const API_ROOT = 'https://api.github.com';
 
 function buildHeaders(token?: string): HeadersInit {
@@ -286,49 +296,89 @@ async function getPullReviewThreadResolutionFromGraphQL(params: {
   return { commentResolution, incomplete };
 }
 
-export async function getIssue(params: { owner: string; repo: string; number: number; token?: string }) {
+export async function getIssue(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  token?: string;
+}): Promise<GitHubIssue> {
   const { owner, repo, number, token } = params;
-  return fetchJson(`${API_ROOT}/repos/${owner}/${repo}/issues/${number}`, token);
+  return fetchJson<GitHubIssue>(`${API_ROOT}/repos/${owner}/${repo}/issues/${number}`, token);
 }
 
-export async function getIssueComments(params: { owner: string; repo: string; number: number; token?: string }) {
+export async function getIssueComments(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  token?: string;
+}): Promise<GitHubIssueComment[]> {
   const { owner, repo, number, token } = params;
   const url = `${API_ROOT}/repos/${owner}/${repo}/issues/${number}/comments?per_page=100`;
-  return fetchAllPages(url, token);
+  return fetchAllPages<GitHubIssueComment>(url, token);
 }
 
-export async function getPullRequest(params: { owner: string; repo: string; number: number; token?: string }) {
+export async function getPullRequest(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  token?: string;
+}): Promise<GitHubPullRequest> {
   const { owner, repo, number, token } = params;
-  return fetchJson(`${API_ROOT}/repos/${owner}/${repo}/pulls/${number}`, token);
+  return fetchJson<GitHubPullRequest>(`${API_ROOT}/repos/${owner}/${repo}/pulls/${number}`, token);
 }
 
-export async function getPullFiles(params: { owner: string; repo: string; number: number; token?: string }) {
+export async function getPullFiles(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  token?: string;
+}): Promise<GitHubPullFile[]> {
   const { owner, repo, number, token } = params;
   const url = `${API_ROOT}/repos/${owner}/${repo}/pulls/${number}/files?per_page=100`;
-  return fetchAllPages(url, token);
+  return fetchAllPages<GitHubPullFile>(url, token);
 }
 
-export async function getPullCommits(params: { owner: string; repo: string; number: number; token?: string }) {
+export async function getPullCommits(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  token?: string;
+}): Promise<GitHubCommit[]> {
   const { owner, repo, number, token } = params;
   const url = `${API_ROOT}/repos/${owner}/${repo}/pulls/${number}/commits?per_page=100`;
-  return fetchAllPages(url, token);
+  return fetchAllPages<GitHubCommit>(url, token);
 }
 
-export async function getCommit(params: { owner: string; repo: string; sha: string; token?: string }) {
+export async function getCommit(params: {
+  owner: string;
+  repo: string;
+  sha: string;
+  token?: string;
+}): Promise<GitHubCommit> {
   const { owner, repo, sha, token } = params;
-  return fetchJson(`${API_ROOT}/repos/${owner}/${repo}/commits/${sha}`, token);
+  return fetchJson<GitHubCommit>(`${API_ROOT}/repos/${owner}/${repo}/commits/${sha}`, token);
 }
 
-export async function getPullReviews(params: { owner: string; repo: string; number: number; token?: string }) {
+export async function getPullReviews(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  token?: string;
+}): Promise<GitHubPullReview[]> {
   const { owner, repo, number, token } = params;
   const url = `${API_ROOT}/repos/${owner}/${repo}/pulls/${number}/reviews?per_page=100`;
-  return fetchAllPages(url, token);
+  return fetchAllPages<GitHubPullReview>(url, token);
 }
 
-export async function getPullReviewComments(params: { owner: string; repo: string; number: number; token?: string }) {
+export async function getPullReviewComments(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  token?: string;
+}): Promise<GitHubPullReviewComment[]> {
   const { owner, repo, number, token } = params;
   const url = `${API_ROOT}/repos/${owner}/${repo}/pulls/${number}/comments?per_page=100`;
-  return fetchAllPages(url, token);
+  return fetchAllPages<GitHubPullReviewComment>(url, token);
 }
 
 export async function getPullReviewThreadResolution(params: {

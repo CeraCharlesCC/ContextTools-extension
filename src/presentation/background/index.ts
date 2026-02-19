@@ -23,6 +23,10 @@ import {
 import type {
   GenerateMarkdownPayload,
   GenerateMarkdownResult,
+  GitHubCommit,
+  GitHubIssueComment,
+  GitHubPullFile,
+  GitHubPullReviewComment,
   Marker,
   MarkerRange,
   TimelineEvent,
@@ -87,9 +91,9 @@ function sliceEventsByRange(
 }
 
 function sliceIssueComments(
-  comments: any[],
+  comments: GitHubIssueComment[],
   range?: MarkerRange
-): { comments: any[]; warning?: string } | { error: string } {
+): { comments: GitHubIssueComment[]; warning?: string } | { error: string } {
   if (!range?.start && !range?.end) {
     return { comments };
   }
@@ -127,8 +131,8 @@ async function getCommitDetailsList(params: {
   owner: string;
   repo: string;
   token: string;
-  commits: any[];
-}): Promise<any[]> {
+  commits: GitHubCommit[];
+}): Promise<GitHubCommit[]> {
   const { owner, repo, token, commits } = params;
   if (!commits?.length) return [];
 
@@ -145,12 +149,20 @@ async function getCommitDetailsList(params: {
   );
 }
 
-function applySmartDiffMode(commits: any[], files: any[]): any[] {
+function applySmartDiffMode(commits: GitHubCommit[], files: GitHubPullFile[]): GitHubCommit[] {
   if (!commits?.length) return commits;
-  const fileSet = new Set((files ?? []).map((file) => file?.filename).filter(Boolean));
+  const fileSet = new Set(
+    (files ?? [])
+      .map((file) => file?.filename)
+      .filter((filename): filename is string => Boolean(filename))
+  );
   return commits.map((commit) => {
     if (!commit?.files?.length) return commit;
-    const filteredFiles = commit.files.filter((file: any) => fileSet.has(file?.filename));
+    const filteredFiles = commit.files.filter((file) => {
+      const filename = file?.filename;
+      if (!filename) return false;
+      return fileSet.has(filename);
+    });
     if (filteredFiles.length === commit.files.length) return commit;
     return { ...commit, files: filteredFiles };
   });
@@ -162,8 +174,8 @@ function combineWarnings(...warnings: Array<string | undefined>): string | undef
   return filtered.join(' ');
 }
 
-function filterResolvedReviewComments(reviewComments: any[], commentResolution: Map<number, boolean> | null): {
-  reviewComments: any[];
+function filterResolvedReviewComments(reviewComments: GitHubPullReviewComment[], commentResolution: Map<number, boolean> | null): {
+  reviewComments: GitHubPullReviewComment[];
   warning?: string;
 } {
   if (!commentResolution) {

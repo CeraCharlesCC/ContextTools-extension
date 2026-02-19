@@ -32,7 +32,6 @@ let currentPage: PageRef | null = null;
 let currentPath = window.location.pathname;
 let markerRange: MarkerRange = {};
 let copyButton: HTMLButtonElement | null = null;
-let settingsDropdown: HTMLDivElement | null = null;
 let resetMarkersButton: HTMLButtonElement | null = null;
 let lastMarkerCandidate: Marker | null = null;
 let isEnabled = true;
@@ -344,7 +343,6 @@ function tryInjectCopyButton(): void {
     void handleCopyClick();
   });
   copyButton = result.copyButton;
-  settingsDropdown = result.settingsDropdown;
   resetMarkersButton = result.resetMarkersButton;
 
   anchor.parentElement.insertBefore(result.group, anchor);
@@ -391,7 +389,6 @@ function handlePageChange(): void {
   updateMarkerHighlights(markerRange);
   lastMarkerCandidate = null;
   copyButtonInjected = false;
-  settingsDropdown = null;
   resetMarkersButton = null;
 
   if (!currentPage || !resolveCurrentPageEnabled()) {

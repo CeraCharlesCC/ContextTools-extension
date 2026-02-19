@@ -1,4 +1,5 @@
 import { formatDate, formatUser } from '../format';
+import type { GitHubIssue, GitHubIssueComment } from '../types';
 
 function renderLabels(labels: Array<{ name?: string }> | null | undefined): string {
   if (!labels || !labels.length) return 'None';
@@ -11,8 +12,8 @@ function renderAssignees(assignees: Array<{ login?: string }> | null | undefined
 }
 
 export function issueToMarkdown(
-  issue: any,
-  comments: any[],
+  issue: GitHubIssue,
+  comments: GitHubIssueComment[],
   options?: { historicalMode?: boolean }
 ): string {
   const lines: string[] = [];
