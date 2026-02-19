@@ -13,7 +13,8 @@ const firefoxManifestPath = resolve(projectRoot, 'src/manifests/firefox.json');
 const CHECK_MODE = process.argv.includes('--check');
 
 function ensureSemver(version) {
-  return /^\d+\.\d+\.\d+([-.+][0-9A-Za-z.-]+)?$/.test(version);
+  // SemVer 2.0.0: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]
+  return /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.test(version);
 }
 
 async function readJson(path) {
