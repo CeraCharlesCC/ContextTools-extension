@@ -1,7 +1,7 @@
 {
   "name": "context-tools-extension",
   "version": "0.1.1",
-  "description": "Cross-browser extension with Clean/Hexagonal Architecture",
+  "description": "Copy GitHub context into markdown.",
   "type": "module",
   "scripts": {
     "dev": "npm run dev:chrome",

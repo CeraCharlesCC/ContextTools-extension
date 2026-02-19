@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Context Tools Extension",
   "version": "0.1.1",
-  "description": "Cross-browser extension with Clean/Hexagonal Architecture",
+  "description": "Copy GitHub context into markdown.",
   "permissions": [
     "storage",
     "tabs",
@@ -24,15 +24,23 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://github.com/*"],
-      "js": ["content/index.js"],
+      "matches": [
+        "https://github.com/*"
+      ],
+      "js": [
+        "content/index.js"
+      ],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["assets/*"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "assets/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }
