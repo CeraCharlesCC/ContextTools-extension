@@ -15,14 +15,8 @@ export class SettingsRepository implements SettingsRepositoryPort {
     const stored = await this.storage.get<Partial<Settings>>(SETTINGS_KEY);
     const defaults = createDefaultSettings();
 
-    if (stored && typeof stored === 'object') {
-      const merged = { ...defaults, ...stored };
-      if (validateSettings(merged)) {
-        if (!validateSettings(stored)) {
-          await this.saveSettings(merged);
-        }
-        return merged;
-      }
+    if (stored && validateSettings(stored)) {
+      return stored;
     }
 
     await this.saveSettings(defaults);

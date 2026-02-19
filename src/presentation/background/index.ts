@@ -5,6 +5,7 @@
 import { getBrowserAdapters } from '@infrastructure/adapters';
 import { SettingsRepository } from '@infrastructure/repositories';
 import { GetSettingsUseCase, UpdateSettingsUseCase } from '@application/usecases';
+import type { SettingsUpdate } from '@domain/entities';
 import {
   buildTimelineEvents,
   getIssue,
@@ -197,12 +198,24 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
 
   // Get settings defaults if options not explicitly provided
   const settings = await getSettingsUseCase.execute();
-  const historicalMode = payload.historicalMode ?? settings.historicalMode;
-  const includeFiles = payload.includeFiles ?? settings.includeFileDiff;
-  const includeCommit = payload.includeCommit ?? settings.includeCommit;
-  const smartDiffMode = payload.smartDiffMode ?? settings.smartDiffMode;
-  const onlyReviewComments = payload.onlyReviewComments ?? settings.onlyReviewComments;
-  const ignoreResolvedComments = payload.ignoreResolvedComments ?? settings.ignoreResolvedComments;
+  const historicalMode = payload.page.kind === 'pull'
+    ? payload.historicalMode ?? settings.pr.historicalMode
+    : payload.historicalMode ?? settings.issue.historicalMode;
+  const smartDiffMode = payload.page.kind === 'pull'
+    ? payload.smartDiffMode ?? settings.pr.smartDiffMode
+    : false;
+  const includeFiles = payload.page.kind === 'pull'
+    ? payload.includeFiles ?? settings.pr.includeFileDiff
+    : false;
+  const includeCommit = payload.page.kind === 'pull'
+    ? payload.includeCommit ?? settings.pr.includeCommit
+    : false;
+  const onlyReviewComments = payload.page.kind === 'pull'
+    ? payload.onlyReviewComments ?? settings.pr.onlyReviewComments
+    : false;
+  const ignoreResolvedComments = payload.page.kind === 'pull'
+    ? payload.ignoreResolvedComments ?? settings.pr.ignoreResolvedComments
+    : false;
 
   const effectiveIncludeFiles = onlyReviewComments ? false : includeFiles;
   const effectiveIncludeCommit = onlyReviewComments ? false : includeCommit;
@@ -216,7 +229,7 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
     }
     return {
       ok: true,
-      markdown: issueToMarkdown(issue, sliceResult.comments),
+      markdown: issueToMarkdown(issue, sliceResult.comments, { historicalMode }),
       warning: sliceResult.warning,
     };
   }
@@ -327,17 +340,7 @@ interface GetSettingsMessage {
 
 interface UpdateSettingsMessage {
   type: 'UPDATE_SETTINGS';
-  payload: {
-    enabled?: boolean;
-    theme?: 'light' | 'dark' | 'system';
-    notifications?: boolean;
-    historicalMode?: boolean;
-    includeFileDiff?: boolean;
-    includeCommit?: boolean;
-    smartDiffMode?: boolean;
-    onlyReviewComments?: boolean;
-    ignoreResolvedComments?: boolean;
-  };
+  payload: SettingsUpdate;
 }
 
 interface GetGitHubTokenMessage {

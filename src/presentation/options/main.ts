@@ -2,20 +2,22 @@
  * Options Page Main Script
  */
 import { getBrowserAdapters, detectBrowser } from '@infrastructure/adapters';
-import type { Settings } from '@domain/entities';
+import type { Settings, SettingsUpdate } from '@domain/entities';
 
 const adapters = getBrowserAdapters();
 
 // DOM Elements
-const enabledToggle = document.getElementById('enabled-toggle') as HTMLInputElement;
-const notificationsToggle = document.getElementById('notifications-toggle') as HTMLInputElement;
-const historicalModeToggle = document.getElementById('historical-mode-toggle') as HTMLInputElement;
-const includeFileDiffToggle = document.getElementById('include-file-diff-toggle') as HTMLInputElement;
-const includeCommitDiffToggle = document.getElementById('include-commit-diff-toggle') as HTMLInputElement;
-const smartDiffModeToggle = document.getElementById('smart-diff-mode-toggle') as HTMLInputElement;
-const onlyReviewCommentsToggle = document.getElementById('only-review-comments-toggle') as HTMLInputElement;
-const ignoreResolvedCommentsToggle = document.getElementById('ignore-resolved-comments-toggle') as HTMLInputElement;
-const themeSelect = document.getElementById('theme-select') as HTMLSelectElement;
+const commonNotificationsToggle = document.getElementById('common-notifications-toggle') as HTMLInputElement;
+const commonThemeSelect = document.getElementById('common-theme-select') as HTMLSelectElement;
+const prEnabledToggle = document.getElementById('pr-enabled-toggle') as HTMLInputElement;
+const prHistoricalModeToggle = document.getElementById('pr-historical-mode-toggle') as HTMLInputElement;
+const prIncludeFileDiffToggle = document.getElementById('pr-include-file-diff-toggle') as HTMLInputElement;
+const prIncludeCommitDiffToggle = document.getElementById('pr-include-commit-diff-toggle') as HTMLInputElement;
+const prSmartDiffModeToggle = document.getElementById('pr-smart-diff-mode-toggle') as HTMLInputElement;
+const prOnlyReviewCommentsToggle = document.getElementById('pr-only-review-comments-toggle') as HTMLInputElement;
+const prIgnoreResolvedCommentsToggle = document.getElementById('pr-ignore-resolved-comments-toggle') as HTMLInputElement;
+const issueEnabledToggle = document.getElementById('issue-enabled-toggle') as HTMLInputElement;
+const issueHistoricalModeToggle = document.getElementById('issue-historical-mode-toggle') as HTMLInputElement;
 const githubTokenInput = document.getElementById('github-token') as HTMLInputElement;
 const githubTokenToggle = document.getElementById('github-token-toggle') as HTMLButtonElement;
 const versionEl = document.getElementById('version')!;
@@ -39,15 +41,19 @@ async function loadSettings(): Promise<void> {
       type: 'GET_SETTINGS',
     });
 
-    enabledToggle.checked = settings.enabled;
-    notificationsToggle.checked = settings.notifications;
-    themeSelect.value = settings.theme;
-    historicalModeToggle.checked = settings.historicalMode;
-    includeFileDiffToggle.checked = settings.includeFileDiff;
-    includeCommitDiffToggle.checked = settings.includeCommit;
-    smartDiffModeToggle.checked = settings.smartDiffMode;
-    onlyReviewCommentsToggle.checked = settings.onlyReviewComments;
-    ignoreResolvedCommentsToggle.checked = settings.ignoreResolvedComments;
+    commonNotificationsToggle.checked = settings.commonSettings.notifications;
+    commonThemeSelect.value = settings.commonSettings.theme;
+
+    prEnabledToggle.checked = settings.pr.enabled;
+    prHistoricalModeToggle.checked = settings.pr.historicalMode;
+    prIncludeFileDiffToggle.checked = settings.pr.includeFileDiff;
+    prIncludeCommitDiffToggle.checked = settings.pr.includeCommit;
+    prSmartDiffModeToggle.checked = settings.pr.smartDiffMode;
+    prOnlyReviewCommentsToggle.checked = settings.pr.onlyReviewComments;
+    prIgnoreResolvedCommentsToggle.checked = settings.pr.ignoreResolvedComments;
+
+    issueEnabledToggle.checked = settings.issue.enabled;
+    issueHistoricalModeToggle.checked = settings.issue.historicalMode;
   } catch (error) {
     console.error('Failed to load settings:', error);
     showStatus('Failed to load settings', 'error');
@@ -67,7 +73,7 @@ async function loadToken(): Promise<void> {
 }
 
 // Update settings
-async function updateSettings(updates: Partial<Settings>): Promise<void> {
+async function updateSettings(updates: SettingsUpdate): Promise<void> {
   try {
     await adapters.messaging.sendMessage({
       type: 'UPDATE_SETTINGS',
@@ -93,42 +99,62 @@ async function updateToken(token: string): Promise<void> {
   }
 }
 
+type CommonBooleanSettingKey = 'notifications';
+type PrBooleanSettingKey =
+  | 'enabled'
+  | 'historicalMode'
+  | 'includeFileDiff'
+  | 'includeCommit'
+  | 'smartDiffMode'
+  | 'onlyReviewComments'
+  | 'ignoreResolvedComments';
+
+type IssueBooleanSettingKey = 'enabled' | 'historicalMode';
+
+function bindCommonBooleanSetting(element: HTMLInputElement, key: CommonBooleanSettingKey): void {
+  element.addEventListener('change', () => {
+    updateSettings({
+      commonSettings: { [key]: element.checked } as Partial<Settings['commonSettings']>,
+    });
+  });
+}
+
+function bindPrBooleanSetting(element: HTMLInputElement, key: PrBooleanSettingKey): void {
+  element.addEventListener('change', () => {
+    updateSettings({
+      pr: { [key]: element.checked } as Partial<Settings['pr']>,
+    });
+  });
+}
+
+function bindIssueBooleanSetting(element: HTMLInputElement, key: IssueBooleanSettingKey): void {
+  element.addEventListener('change', () => {
+    updateSettings({
+      issue: { [key]: element.checked } as Partial<Settings['issue']>,
+    });
+  });
+}
+
+function bindCommonThemeSetting(element: HTMLSelectElement): void {
+  element.addEventListener('change', () => {
+    updateSettings({
+      commonSettings: { theme: element.value as Settings['commonSettings']['theme'] },
+    });
+  });
+}
+
 // Event handlers
-enabledToggle.addEventListener('change', () => {
-  updateSettings({ enabled: enabledToggle.checked });
-});
-
-notificationsToggle.addEventListener('change', () => {
-  updateSettings({ notifications: notificationsToggle.checked });
-});
-
-themeSelect.addEventListener('change', () => {
-  updateSettings({ theme: themeSelect.value as Settings['theme'] });
-});
-
-historicalModeToggle.addEventListener('change', () => {
-  updateSettings({ historicalMode: historicalModeToggle.checked });
-});
-
-includeFileDiffToggle.addEventListener('change', () => {
-  updateSettings({ includeFileDiff: includeFileDiffToggle.checked });
-});
-
-includeCommitDiffToggle.addEventListener('change', () => {
-  updateSettings({ includeCommit: includeCommitDiffToggle.checked });
-});
-
-smartDiffModeToggle.addEventListener('change', () => {
-  updateSettings({ smartDiffMode: smartDiffModeToggle.checked });
-});
-
-onlyReviewCommentsToggle.addEventListener('change', () => {
-  updateSettings({ onlyReviewComments: onlyReviewCommentsToggle.checked });
-});
-
-ignoreResolvedCommentsToggle.addEventListener('change', () => {
-  updateSettings({ ignoreResolvedComments: ignoreResolvedCommentsToggle.checked });
-});
+bindCommonBooleanSetting(commonNotificationsToggle, 'notifications');
+bindCommonThemeSetting(commonThemeSelect);
+bindPrBooleanSetting(prEnabledToggle, 'enabled');
+bindIssueBooleanSetting(issueEnabledToggle, 'enabled');
+bindPrBooleanSetting(prHistoricalModeToggle, 'historicalMode');
+bindPrBooleanSetting(prIncludeFileDiffToggle, 'includeFileDiff');
+bindPrBooleanSetting(prIncludeCommitDiffToggle, 'includeCommit');
+bindPrBooleanSetting(prSmartDiffModeToggle, 'smartDiffMode');
+bindPrBooleanSetting(prOnlyReviewCommentsToggle, 'onlyReviewComments');
+bindPrBooleanSetting(prIgnoreResolvedCommentsToggle, 'ignoreResolvedComments');
+bindIssueBooleanSetting(issueHistoricalModeToggle, 'historicalMode');
 
 githubTokenToggle.addEventListener('click', () => {
   const isHidden = githubTokenInput.type === 'password';

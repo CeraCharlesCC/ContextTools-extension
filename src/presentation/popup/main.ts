@@ -2,12 +2,13 @@
  * Popup Main Script
  */
 import { getBrowserAdapters } from '@infrastructure/adapters';
-import type { Settings } from '@domain/entities';
+import type { Settings, SettingsUpdate } from '@domain/entities';
 
 const adapters = getBrowserAdapters();
 
 // DOM Elements
-const enabledToggle = document.getElementById('enabled-toggle') as HTMLInputElement;
+const prEnabledToggle = document.getElementById('pr-enabled-toggle') as HTMLInputElement;
+const issueEnabledToggle = document.getElementById('issue-enabled-toggle') as HTMLInputElement;
 const pageInfoEl = document.getElementById('page-info')!;
 const optionsBtn = document.getElementById('options-btn')!;
 
@@ -17,7 +18,8 @@ async function loadSettings(): Promise<void> {
     const settings = await adapters.messaging.sendMessage<{ type: string }, Settings>({
       type: 'GET_SETTINGS',
     });
-    enabledToggle.checked = settings.enabled;
+    prEnabledToggle.checked = settings.pr.enabled;
+    issueEnabledToggle.checked = settings.issue.enabled;
   } catch (error) {
     console.error('Failed to load settings:', error);
   }
@@ -45,18 +47,25 @@ async function loadPageInfo(): Promise<void> {
   }
 }
 
+function bindEnabledToggle(toggle: HTMLInputElement, scope: 'pr' | 'issue'): void {
+  toggle.addEventListener('change', async () => {
+    try {
+      const enabled = toggle.checked;
+      const payload = { [scope]: { enabled } } as SettingsUpdate;
+      await adapters.messaging.sendMessage({
+        type: 'UPDATE_SETTINGS',
+        payload,
+      });
+    } catch (error) {
+      console.error('Failed to update settings:', error);
+      toggle.checked = !toggle.checked;
+    }
+  });
+}
+
 // Event handlers
-enabledToggle.addEventListener('change', async () => {
-  try {
-    await adapters.messaging.sendMessage({
-      type: 'UPDATE_SETTINGS',
-      payload: { enabled: enabledToggle.checked },
-    });
-  } catch (error) {
-    console.error('Failed to update settings:', error);
-    enabledToggle.checked = !enabledToggle.checked;
-  }
-});
+bindEnabledToggle(prEnabledToggle, 'pr');
+bindEnabledToggle(issueEnabledToggle, 'issue');
 
 optionsBtn.addEventListener('click', () => {
   adapters.runtime.openOptionsPage();
