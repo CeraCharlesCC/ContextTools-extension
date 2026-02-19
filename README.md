@@ -58,4 +58,4 @@ Then load `dist-chrome/` or `dist-firefox/` into your browser using the same ste
 
 ## License
 
-[GNU General Public License v3.0](./LICENSE)
+[GNU Affero General Public License v3.0](./LICENSE)
