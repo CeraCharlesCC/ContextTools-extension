@@ -29,8 +29,17 @@ import type {
   GitHubPullReviewComment,
   Marker,
   MarkerRange,
+  PageKind,
   TimelineEvent,
 } from '@shared/github';
+import {
+  buildPullFetchPlan,
+  resolveIssueTimelineMode,
+  resolvePullExportState,
+  sanitizeIssueLastExportState,
+  sanitizePullLastExportState,
+} from './export-resolution';
+import type { IssueLastExportState, LastExportState, PullLastExportState } from './export-resolution';
 
 // Initialize adapters
 const adapters = getBrowserAdapters();
@@ -43,6 +52,7 @@ const getSettingsUseCase = new GetSettingsUseCase(settingsRepository);
 const updateSettingsUseCase = new UpdateSettingsUseCase(settingsRepository);
 
 const GITHUB_TOKEN_KEY = 'github_token';
+const LAST_EXPORT_STATE_KEY = 'last_export_state_v1';
 
 async function getGitHubToken(): Promise<string> {
   const token = await adapters.storage.get<string>(GITHUB_TOKEN_KEY);
@@ -51,6 +61,58 @@ async function getGitHubToken(): Promise<string> {
 
 async function setGitHubToken(token: string): Promise<void> {
   await adapters.storage.set(GITHUB_TOKEN_KEY, token);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+async function readLastExportState(): Promise<LastExportState> {
+  const stored = await adapters.storage.get<unknown>(LAST_EXPORT_STATE_KEY);
+  const record = asRecord(stored);
+  if (!record) {
+    return {};
+  }
+
+  return {
+    pull: sanitizePullLastExportState(record.pull) ?? undefined,
+    issue: sanitizeIssueLastExportState(record.issue) ?? undefined,
+  };
+}
+
+async function writeLastExportState(state: LastExportState): Promise<void> {
+  await adapters.storage.set(LAST_EXPORT_STATE_KEY, state);
+}
+
+async function getLastExportState(kind: PageKind): Promise<PullLastExportState | IssueLastExportState | null> {
+  const current = await readLastExportState();
+  if (kind === 'pull') {
+    return current.pull ?? null;
+  }
+  return current.issue ?? null;
+}
+
+async function setLastExportState(kind: PageKind, state: unknown): Promise<void> {
+  const current = await readLastExportState();
+
+  if (kind === 'pull') {
+    const sanitized = sanitizePullLastExportState(state);
+    if (!sanitized) {
+      return;
+    }
+    current.pull = sanitized;
+  } else {
+    const sanitized = sanitizeIssueLastExportState(state);
+    if (!sanitized) {
+      return;
+    }
+    current.issue = sanitized;
+  }
+
+  await writeLastExportState(current);
 }
 
 function findEventIndex(events: TimelineEvent[], marker: Marker): number {
@@ -208,68 +270,70 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
   const token = await getGitHubToken();
   const { owner, repo, number } = payload.page;
 
-  // Get settings defaults if options not explicitly provided
   const settings = await getSettingsUseCase.execute();
-  const historicalMode = payload.page.kind === 'pull'
-    ? payload.historicalMode ?? settings.pr.historicalMode
-    : payload.historicalMode ?? settings.issue.historicalMode;
-  const smartDiffMode = payload.page.kind === 'pull'
-    ? payload.smartDiffMode ?? settings.pr.smartDiffMode
-    : false;
-  const includeFiles = payload.page.kind === 'pull'
-    ? payload.includeFiles ?? settings.pr.includeFileDiff
-    : false;
-  const includeCommit = payload.page.kind === 'pull'
-    ? payload.includeCommit ?? settings.pr.includeCommit
-    : false;
-  const onlyReviewComments = payload.page.kind === 'pull'
-    ? payload.onlyReviewComments ?? settings.pr.onlyReviewComments
-    : false;
-  const ignoreResolvedComments = payload.page.kind === 'pull'
-    ? payload.ignoreResolvedComments ?? settings.pr.ignoreResolvedComments
-    : false;
-
-  const effectiveIncludeFiles = onlyReviewComments ? false : includeFiles;
-  const effectiveIncludeCommit = onlyReviewComments ? false : includeCommit;
+  const runtimeState = await readLastExportState();
 
   if (payload.page.kind === 'issue') {
+    const timelineMode = resolveIssueTimelineMode({
+      payload,
+      issueDefaultTimelineMode: settings.issue.historicalMode,
+      lastState: runtimeState.issue,
+    });
+
     const issue = await getIssue({ owner, repo, number, token });
     const comments = await getIssueComments({ owner, repo, number, token });
     const sliceResult = sliceIssueComments(comments, payload.range);
     if ('error' in sliceResult) {
       return { ok: false, error: sliceResult.error };
     }
+
     return {
       ok: true,
-      markdown: issueToMarkdown(issue, sliceResult.comments, { historicalMode }),
+      markdown: issueToMarkdown(issue, sliceResult.comments, { historicalMode: timelineMode }),
       warning: sliceResult.warning,
     };
   }
 
+  const pullState = resolvePullExportState({
+    payload,
+    defaults: settings.pr,
+    lastState: runtimeState.pull,
+  });
+  const fetchPlan = buildPullFetchPlan(pullState.options);
+
   const pr = await getPullRequest({ owner, repo, number, token });
   const [issueComments, reviewComments, reviews] = await Promise.all([
-    getIssueComments({ owner, repo, number, token }),
-    getPullReviewComments({ owner, repo, number, token }),
-    getPullReviews({ owner, repo, number, token }),
+    fetchPlan.shouldFetchIssueComments
+      ? getIssueComments({ owner, repo, number, token })
+      : Promise.resolve([]),
+    fetchPlan.shouldFetchReviewComments
+      ? getPullReviewComments({ owner, repo, number, token })
+      : Promise.resolve([]),
+    fetchPlan.shouldFetchReviews
+      ? getPullReviews({ owner, repo, number, token })
+      : Promise.resolve([]),
   ]);
-
-  const shouldFetchFiles = effectiveIncludeFiles || (effectiveIncludeCommit && smartDiffMode);
-  const shouldFetchCommits = effectiveIncludeCommit;
 
   const [files, commits] = await Promise.all([
-    shouldFetchFiles ? getPullFiles({ owner, repo, number, token }) : Promise.resolve([]),
-    shouldFetchCommits ? getPullCommits({ owner, repo, number, token }) : Promise.resolve([]),
+    fetchPlan.shouldFetchFiles
+      ? getPullFiles({ owner, repo, number, token })
+      : Promise.resolve([]),
+    fetchPlan.shouldFetchCommits
+      ? getPullCommits({ owner, repo, number, token })
+      : Promise.resolve([]),
   ]);
 
-  const detailedCommits = shouldFetchCommits
+  const detailedCommits = fetchPlan.shouldFetchCommits && fetchPlan.includeCommitDiffs
     ? await getCommitDetailsList({ owner, repo, token, commits })
-    : [];
+    : commits;
 
-  const finalCommits = effectiveIncludeCommit && smartDiffMode ? applySmartDiffMode(detailedCommits, files) : detailedCommits;
+  const finalCommits = fetchPlan.includeCommitDiffs && fetchPlan.smartDiffMode
+    ? applySmartDiffMode(detailedCommits, files)
+    : detailedCommits;
 
   let resolvedFilterWarning: string | undefined;
   let reviewCommentResolution: Map<number, boolean> | null = null;
-  if (ignoreResolvedComments) {
+  if (fetchPlan.shouldFetchReviewThreadResolution) {
     try {
       const resolution = await getPullReviewThreadResolution({ owner, repo, number, token });
       reviewCommentResolution = resolution.commentResolution;
@@ -286,16 +350,20 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
 
   if (payload.range?.start || payload.range?.end) {
     const events = buildTimelineEvents({
-      commits: effectiveIncludeCommit ? finalCommits : undefined,
-      issueComments,
-      reviewComments,
-      reviews,
+      commits: fetchPlan.includeCommits ? finalCommits : undefined,
+      issueComments: fetchPlan.includeIssueComments ? issueComments : undefined,
+      reviewComments: fetchPlan.includeReviewComments ? reviewComments : undefined,
+      reviews: fetchPlan.includeReviews ? reviews : undefined,
     });
+
     const sliceResult = sliceEventsByRange(events, payload.range);
     if ('error' in sliceResult) {
       return { ok: false, error: sliceResult.error };
     }
 
+    const selectedCommits = sliceResult.events
+      .filter((event) => event.type === 'commit')
+      .map((event) => (event as Extract<TimelineEvent, { type: 'commit' }>).commit);
     const selectedIssueComments = sliceResult.events
       .filter((event) => event.type === 'issue-comment')
       .map((event) => (event as Extract<TimelineEvent, { type: 'issue-comment' }>).comment);
@@ -305,41 +373,39 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
     const selectedReviews = sliceResult.events
       .filter((event) => event.type === 'review')
       .map((event) => (event as Extract<TimelineEvent, { type: 'review' }>).review);
-    const resolvedFilterResult = filterResolvedReviewComments(selectedReviewComments, reviewCommentResolution);
+    const resolvedFilterResult = fetchPlan.includeReviewComments
+      ? filterResolvedReviewComments(selectedReviewComments, reviewCommentResolution)
+      : { reviewComments: selectedReviewComments };
 
     return {
       ok: true,
       markdown: prToMarkdown({
         pr,
-        commits: effectiveIncludeCommit ? finalCommits : undefined,
-        files: effectiveIncludeFiles ? files : undefined,
-        issueComments: onlyReviewComments ? [] : selectedIssueComments,
-        reviewComments: resolvedFilterResult.reviewComments,
-        reviews: onlyReviewComments ? [] : selectedReviews,
-        historicalMode: onlyReviewComments ? false : true,
-        includeFiles: effectiveIncludeFiles,
-        includeCommit: effectiveIncludeCommit,
-        onlyReviewComments,
+        commits: fetchPlan.includeCommits ? selectedCommits : undefined,
+        files: fetchPlan.includeFileDiffs ? files : undefined,
+        issueComments: fetchPlan.includeIssueComments ? selectedIssueComments : undefined,
+        reviewComments: fetchPlan.includeReviewComments ? resolvedFilterResult.reviewComments : undefined,
+        reviews: fetchPlan.includeReviews ? selectedReviews : undefined,
+        options: pullState.options,
       }),
       warning: combineWarnings(sliceResult.warning, resolvedFilterWarning, resolvedFilterResult.warning),
     };
   }
 
-  const resolvedFilterResult = filterResolvedReviewComments(reviewComments, reviewCommentResolution);
+  const resolvedFilterResult = fetchPlan.includeReviewComments
+    ? filterResolvedReviewComments(reviewComments, reviewCommentResolution)
+    : { reviewComments };
 
   return {
     ok: true,
     markdown: prToMarkdown({
       pr,
-      commits: effectiveIncludeCommit ? finalCommits : undefined,
-      files: effectiveIncludeFiles ? files : undefined,
-      issueComments: onlyReviewComments ? [] : issueComments,
-      reviewComments: resolvedFilterResult.reviewComments,
-      reviews: onlyReviewComments ? [] : reviews,
-      historicalMode,
-      includeFiles: effectiveIncludeFiles,
-      includeCommit: effectiveIncludeCommit,
-      onlyReviewComments,
+      commits: fetchPlan.includeCommits ? finalCommits : undefined,
+      files: fetchPlan.includeFileDiffs ? files : undefined,
+      issueComments: fetchPlan.includeIssueComments ? issueComments : undefined,
+      reviewComments: fetchPlan.includeReviewComments ? resolvedFilterResult.reviewComments : undefined,
+      reviews: fetchPlan.includeReviews ? reviews : undefined,
+      options: pullState.options,
     }),
     warning: combineWarnings(resolvedFilterWarning, resolvedFilterResult.warning),
   };
@@ -371,12 +437,29 @@ interface GenerateMarkdownMessage {
   payload: GenerateMarkdownPayload;
 }
 
+interface GetLastExportStateMessage {
+  type: 'GET_LAST_EXPORT_STATE';
+  payload: {
+    kind: PageKind;
+  };
+}
+
+interface SetLastExportStateMessage {
+  type: 'SET_LAST_EXPORT_STATE';
+  payload: {
+    kind: PageKind;
+    state: unknown;
+  };
+}
+
 type Message =
   | GetSettingsMessage
   | UpdateSettingsMessage
   | GetGitHubTokenMessage
   | SetGitHubTokenMessage
-  | GenerateMarkdownMessage;
+  | GenerateMarkdownMessage
+  | GetLastExportStateMessage
+  | SetLastExportStateMessage;
 
 // Message handler
 adapters.messaging.addListener(async (message: Message) => {
@@ -403,6 +486,13 @@ adapters.messaging.addListener(async (message: Message) => {
           error: error instanceof Error ? error.message : 'Failed to generate markdown.',
         };
       }
+
+    case 'GET_LAST_EXPORT_STATE':
+      return getLastExportState(message.payload.kind);
+
+    case 'SET_LAST_EXPORT_STATE':
+      await setLastExportState(message.payload.kind, message.payload.state);
+      return { ok: true };
 
     default:
       console.warn('Unknown message type:', message);

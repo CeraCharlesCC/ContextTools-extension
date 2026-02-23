@@ -74,73 +74,82 @@
 
         <div class="setting-row">
           <div class="setting-info">
-            <label for="pr-historical-mode-toggle">Timeline Mode</label>
-            <p class="setting-description">Show comments in chronological order</p>
+            <label for="pr-default-preset-select">Default Preset</label>
+            <p class="setting-description">Used for new PR exports. Advanced changes in the dropdown switch to Custom.</p>
           </div>
-          <label class="toggle">
-            <input type="checkbox" id="pr-historical-mode-toggle">
-            <span class="toggle-slider"></span>
-          </label>
+          <select id="pr-default-preset-select" class="select">
+            <option value="full-conversation">Full conversation</option>
+            <option value="with-diffs">With diffs</option>
+            <option value="review-comments-only">Review comments only</option>
+            <option value="commit-log">Commit log</option>
+            <option value="custom">Custom</option>
+          </select>
         </div>
 
-        <div class="setting-row">
+        <div class="setting-row setting-row-column setting-row-no-divider">
           <div class="setting-info">
-            <label for="pr-include-file-diff-toggle">Include File Diffs</label>
-            <p class="setting-description">Include file diff patches in the export</p>
+            <label>Default Custom Options</label>
+            <p class="setting-description">Applied when the default preset is set to Custom.</p>
           </div>
-          <label class="toggle">
-            <input type="checkbox" id="pr-include-file-diff-toggle">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
+          <div class="advanced-options-grid">
+            <div class="advanced-options-group">
+              <h3>Content</h3>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pr-custom-include-issue-comments-toggle">
+                <span>Include issue comments</span>
+              </label>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pr-custom-include-review-comments-toggle">
+                <span>Include review comments</span>
+              </label>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pr-custom-include-reviews-toggle">
+                <span>Include reviews</span>
+              </label>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pr-custom-include-commits-toggle">
+                <span>Include commits</span>
+              </label>
+            </div>
 
-        <div class="setting-row">
-          <div class="setting-info">
-            <label for="pr-include-commit-diff-toggle">Include Commit Diffs</label>
-            <p class="setting-description">Include per-commit diff patches in the export</p>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="pr-include-commit-diff-toggle">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
+            <div class="advanced-options-group">
+              <h3>Diffs</h3>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pr-custom-include-file-diffs-toggle">
+                <span>Include file diffs</span>
+              </label>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pr-custom-include-commit-diffs-toggle">
+                <span>Include commit diffs</span>
+              </label>
+              <label class="checkbox-row" id="pr-custom-smart-diff-row">
+                <input type="checkbox" id="pr-custom-smart-diff-mode-toggle">
+                <span>Smart diff mode</span>
+              </label>
+            </div>
 
-        <div class="setting-row">
-          <div class="setting-info">
-            <label for="pr-smart-diff-mode-toggle">Smart Diff Mode</label>
-            <p class="setting-description">Skip commit diffs that are fully reverted later in the PR</p>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="pr-smart-diff-mode-toggle">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
+            <div class="advanced-options-group">
+              <h3>Ordering</h3>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pr-custom-timeline-mode-toggle">
+                <span>Timeline mode</span>
+              </label>
+            </div>
 
-        <div class="setting-row">
-          <div class="setting-info">
-            <label for="pr-only-review-comments-toggle">Only Review Comments</label>
-            <p class="setting-description">PR only: export only inline review comments</p>
+            <div class="advanced-options-group">
+              <h3>Filters</h3>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pr-custom-ignore-resolved-comments-toggle">
+                <span>Ignore resolved comments</span>
+              </label>
+            </div>
           </div>
-          <label class="toggle">
-            <input type="checkbox" id="pr-only-review-comments-toggle">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-info">
-            <label for="pr-ignore-resolved-comments-toggle">Ignore Resolved Comments</label>
-            <p class="setting-description">PR only: skip review comments in resolved threads</p>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="pr-ignore-resolved-comments-toggle">
-            <span class="toggle-slider"></span>
-          </label>
         </div>
       </section>
 
       <section class="section">
         <h2>Issues</h2>
+        <p class="section-note">Issue exports always use Full conversation content. Only timeline ordering is configurable.</p>
 
         <div class="setting-row">
           <div class="setting-info">

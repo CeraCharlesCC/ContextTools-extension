@@ -1,4 +1,5 @@
 import { formatDate, formatUser } from '../format';
+import type { ExportOptions } from '@domain/entities';
 import type {
   GitHubCommit,
   GitHubIssueComment,
@@ -213,13 +214,11 @@ export function prToMarkdown(input: {
   reviewComments?: GitHubPullReviewComment[];
   reviews?: GitHubPullReview[];
   commits?: GitHubCommit[];
-  historicalMode?: boolean;
-  includeFiles?: boolean;
-  includeCommit?: boolean;
-  onlyReviewComments?: boolean;
+  options: ExportOptions;
 }): string {
   const lines: string[] = [];
   const state = input.pr.merged ? 'merged' : input.pr.state;
+  const options = input.options;
 
   lines.push(`# PR: ${input.pr.title}`);
   lines.push('');
@@ -251,21 +250,25 @@ export function prToMarkdown(input: {
   lines.push('## Description');
   renderBody(lines, input.pr.body, '_No description provided._');
 
-  if (input.onlyReviewComments) {
-    renderReviewCommentsSection(lines, input.reviewComments);
-    return lines.join('\n');
-  }
-
-  if (input.historicalMode) {
+  if (options.timelineMode) {
     const events = buildTimelineEvents({
-      commits: input.includeCommit ? input.commits : undefined,
-      issueComments: input.issueComments,
-      reviewComments: input.reviewComments,
-      reviews: input.reviews,
+      commits: options.includeCommits ? input.commits : undefined,
+      issueComments: options.includeIssueComments ? input.issueComments : undefined,
+      reviewComments: options.includeReviewComments ? input.reviewComments : undefined,
+      reviews: options.includeReviews ? input.reviews : undefined,
     });
-    renderTimelineSection(lines, events, { includeCommitFiles: input.includeCommit });
+    renderTimelineSection(lines, events, { includeCommitFiles: options.includeCommitDiffs });
+
+    if (options.includeFileDiffs && input.files?.length) {
+      lines.push('');
+      lines.push(`## Files (${input.files.length})`);
+      input.files.forEach((file) => {
+        lines.push('');
+        renderFileDiff(lines, file, '###');
+      });
+    }
   } else {
-    if (input.files?.length) {
+    if (options.includeFileDiffs && input.files?.length) {
       lines.push('');
       lines.push(`## Files (${input.files.length})`);
       input.files.forEach((file) => {
@@ -274,7 +277,7 @@ export function prToMarkdown(input: {
       });
     }
 
-    if (input.includeCommit && input.commits?.length) {
+    if (options.includeCommits && input.commits?.length) {
       lines.push('');
       lines.push(`## Commits (${input.commits.length})`);
       input.commits.forEach((commit, index) => {
@@ -282,12 +285,12 @@ export function prToMarkdown(input: {
         renderCommitEntry(lines, commit, index, date, {
           heading: '###',
           diffHeading: '####',
-          includeFiles: true,
+          includeFiles: options.includeCommitDiffs,
         });
       });
     }
 
-    if (input.issueComments?.length) {
+    if (options.includeIssueComments && input.issueComments?.length) {
       lines.push('');
       lines.push(`## Issue Comments (${input.issueComments.length})`);
       input.issueComments.forEach((comment, index) => {
@@ -297,9 +300,11 @@ export function prToMarkdown(input: {
       });
     }
 
-    renderReviewCommentsSection(lines, input.reviewComments);
+    if (options.includeReviewComments) {
+      renderReviewCommentsSection(lines, input.reviewComments);
+    }
 
-    if (input.reviews?.length) {
+    if (options.includeReviews && input.reviews?.length) {
       lines.push('');
       lines.push(`## Reviews (${input.reviews.length})`);
       input.reviews.forEach((review, index) => {

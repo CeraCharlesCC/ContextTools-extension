@@ -1,3 +1,5 @@
+import type { ExportOptions, ExportPreset } from '@domain/entities';
+
 export type PageKind = 'issue' | 'pull';
 
 export type MarkerType = 'issue-comment' | 'review-comment' | 'review';
@@ -22,12 +24,8 @@ export interface MarkerRange {
 export interface GenerateMarkdownPayload {
   page: PageRef;
   range?: MarkerRange;
-  historicalMode?: boolean;
-  includeFiles?: boolean;
-  includeCommit?: boolean;
-  smartDiffMode?: boolean;
-  onlyReviewComments?: boolean;
-  ignoreResolvedComments?: boolean;
+  preset?: ExportPreset;
+  customOptions?: Partial<ExportOptions>;
 }
 
 export interface GenerateMarkdownResponse {
