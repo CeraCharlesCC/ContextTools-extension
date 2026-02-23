@@ -29,6 +29,10 @@ function readTheme(
   return value === 'light' || value === 'dark' || value === 'system' ? value : fallback;
 }
 
+type MutableCustomOptions = {
+  -readonly [K in keyof Settings['pr']['customOptions']]: Settings['pr']['customOptions'][K];
+};
+
 /**
  * Use Case: Get Settings
  */
@@ -51,6 +55,13 @@ export class UpdateSettingsUseCase {
     const common = isRecord(settings.commonSettings) ? settings.commonSettings : {};
     const pr = isRecord(settings.pr) ? settings.pr : {};
     const issue = isRecord(settings.issue) ? settings.issue : {};
+    const prCustomOptions = isRecord(pr.customOptions) ? pr.customOptions : undefined;
+    const customOptions = (
+      Object.keys(current.pr.customOptions) as Array<keyof Settings['pr']['customOptions']>
+    ).reduce((acc, key) => {
+      acc[key] = readBoolean(prCustomOptions?.[key], current.pr.customOptions[key]);
+      return acc;
+    }, {} as MutableCustomOptions);
 
     const updated: Settings = {
       commonSettings: {
@@ -60,44 +71,7 @@ export class UpdateSettingsUseCase {
       pr: {
         enabled: readBoolean(pr.enabled, current.pr.enabled),
         defaultPreset: readPreset(pr.defaultPreset, current.pr.defaultPreset),
-        customOptions: {
-          includeIssueComments: readBoolean(
-            isRecord(pr.customOptions) ? pr.customOptions.includeIssueComments : undefined,
-            current.pr.customOptions.includeIssueComments
-          ),
-          includeReviewComments: readBoolean(
-            isRecord(pr.customOptions) ? pr.customOptions.includeReviewComments : undefined,
-            current.pr.customOptions.includeReviewComments
-          ),
-          includeReviews: readBoolean(
-            isRecord(pr.customOptions) ? pr.customOptions.includeReviews : undefined,
-            current.pr.customOptions.includeReviews
-          ),
-          includeCommits: readBoolean(
-            isRecord(pr.customOptions) ? pr.customOptions.includeCommits : undefined,
-            current.pr.customOptions.includeCommits
-          ),
-          includeFileDiffs: readBoolean(
-            isRecord(pr.customOptions) ? pr.customOptions.includeFileDiffs : undefined,
-            current.pr.customOptions.includeFileDiffs
-          ),
-          includeCommitDiffs: readBoolean(
-            isRecord(pr.customOptions) ? pr.customOptions.includeCommitDiffs : undefined,
-            current.pr.customOptions.includeCommitDiffs
-          ),
-          smartDiffMode: readBoolean(
-            isRecord(pr.customOptions) ? pr.customOptions.smartDiffMode : undefined,
-            current.pr.customOptions.smartDiffMode
-          ),
-          timelineMode: readBoolean(
-            isRecord(pr.customOptions) ? pr.customOptions.timelineMode : undefined,
-            current.pr.customOptions.timelineMode
-          ),
-          ignoreResolvedComments: readBoolean(
-            isRecord(pr.customOptions) ? pr.customOptions.ignoreResolvedComments : undefined,
-            current.pr.customOptions.ignoreResolvedComments
-          ),
-        },
+        customOptions,
       },
       issue: {
         enabled: readBoolean(issue.enabled, current.issue.enabled),

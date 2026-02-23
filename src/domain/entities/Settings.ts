@@ -155,17 +155,7 @@ function readTheme(value: unknown, fallback: CommonSettings['theme']): CommonSet
 }
 
 function cloneExportOptions(options: ExportOptions): ExportOptions {
-  return {
-    includeIssueComments: options.includeIssueComments,
-    includeReviewComments: options.includeReviewComments,
-    includeReviews: options.includeReviews,
-    includeCommits: options.includeCommits,
-    includeFileDiffs: options.includeFileDiffs,
-    includeCommitDiffs: options.includeCommitDiffs,
-    smartDiffMode: options.smartDiffMode,
-    timelineMode: options.timelineMode,
-    ignoreResolvedComments: options.ignoreResolvedComments,
-  };
+  return { ...options };
 }
 
 function isExportPreset(value: unknown): value is ExportPreset {
