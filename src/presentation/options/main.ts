@@ -2,7 +2,7 @@
  * Options Page Main Script
  */
 import { getBrowserAdapters, detectBrowser } from '@infrastructure/adapters';
-import type { Settings, SettingsUpdate } from '@domain/entities';
+import type { ExportOptions, ExportPreset, Settings, SettingsUpdate } from '@domain/entities';
 
 const adapters = getBrowserAdapters();
 
@@ -10,12 +10,7 @@ const adapters = getBrowserAdapters();
 const commonNotificationsToggle = document.getElementById('common-notifications-toggle') as HTMLInputElement;
 const commonThemeSelect = document.getElementById('common-theme-select') as HTMLSelectElement;
 const prEnabledToggle = document.getElementById('pr-enabled-toggle') as HTMLInputElement;
-const prHistoricalModeToggle = document.getElementById('pr-historical-mode-toggle') as HTMLInputElement;
-const prIncludeFileDiffToggle = document.getElementById('pr-include-file-diff-toggle') as HTMLInputElement;
-const prIncludeCommitDiffToggle = document.getElementById('pr-include-commit-diff-toggle') as HTMLInputElement;
-const prSmartDiffModeToggle = document.getElementById('pr-smart-diff-mode-toggle') as HTMLInputElement;
-const prOnlyReviewCommentsToggle = document.getElementById('pr-only-review-comments-toggle') as HTMLInputElement;
-const prIgnoreResolvedCommentsToggle = document.getElementById('pr-ignore-resolved-comments-toggle') as HTMLInputElement;
+const prDefaultPresetSelect = document.getElementById('pr-default-preset-select') as HTMLSelectElement;
 const issueEnabledToggle = document.getElementById('issue-enabled-toggle') as HTMLInputElement;
 const issueHistoricalModeToggle = document.getElementById('issue-historical-mode-toggle') as HTMLInputElement;
 const githubTokenInput = document.getElementById('github-token') as HTMLInputElement;
@@ -23,6 +18,20 @@ const githubTokenToggle = document.getElementById('github-token-toggle') as HTML
 const versionEl = document.getElementById('version')!;
 const browserTypeEl = document.getElementById('browser-type')!;
 const saveStatusEl = document.getElementById('save-status')!;
+
+const prCustomSmartDiffRow = document.getElementById('pr-custom-smart-diff-row') as HTMLLabelElement;
+
+const prCustomOptionInputs: Record<keyof ExportOptions, HTMLInputElement> = {
+  includeIssueComments: document.getElementById('pr-custom-include-issue-comments-toggle') as HTMLInputElement,
+  includeReviewComments: document.getElementById('pr-custom-include-review-comments-toggle') as HTMLInputElement,
+  includeReviews: document.getElementById('pr-custom-include-reviews-toggle') as HTMLInputElement,
+  includeCommits: document.getElementById('pr-custom-include-commits-toggle') as HTMLInputElement,
+  includeFileDiffs: document.getElementById('pr-custom-include-file-diffs-toggle') as HTMLInputElement,
+  includeCommitDiffs: document.getElementById('pr-custom-include-commit-diffs-toggle') as HTMLInputElement,
+  smartDiffMode: document.getElementById('pr-custom-smart-diff-mode-toggle') as HTMLInputElement,
+  timelineMode: document.getElementById('pr-custom-timeline-mode-toggle') as HTMLInputElement,
+  ignoreResolvedComments: document.getElementById('pr-custom-ignore-resolved-comments-toggle') as HTMLInputElement,
+};
 
 // Show save status
 function showStatus(message: string, type: 'success' | 'error'): void {
@@ -32,6 +41,34 @@ function showStatus(message: string, type: 'success' | 'error'): void {
   setTimeout(() => {
     saveStatusEl.classList.remove('visible');
   }, 2000);
+}
+
+function isExportPreset(value: string): value is ExportPreset {
+  return value === 'full-conversation' ||
+    value === 'with-diffs' ||
+    value === 'review-comments-only' ||
+    value === 'commit-log' ||
+    value === 'custom';
+}
+
+function updateSmartDiffControl(): void {
+  const includeCommitDiffsInput = prCustomOptionInputs.includeCommitDiffs;
+  const smartDiffInput = prCustomOptionInputs.smartDiffMode;
+
+  const enabled = includeCommitDiffsInput.checked;
+  const tooltip = 'Enable “Include commit diffs” to use Smart diff mode.';
+
+  smartDiffInput.disabled = !enabled;
+  if (!enabled) {
+    smartDiffInput.checked = false;
+    smartDiffInput.title = tooltip;
+    prCustomSmartDiffRow.title = tooltip;
+  } else {
+    smartDiffInput.removeAttribute('title');
+    prCustomSmartDiffRow.removeAttribute('title');
+  }
+
+  prCustomSmartDiffRow.classList.toggle('is-disabled', !enabled);
 }
 
 // Load settings
@@ -45,12 +82,12 @@ async function loadSettings(): Promise<void> {
     commonThemeSelect.value = settings.commonSettings.theme;
 
     prEnabledToggle.checked = settings.pr.enabled;
-    prHistoricalModeToggle.checked = settings.pr.historicalMode;
-    prIncludeFileDiffToggle.checked = settings.pr.includeFileDiff;
-    prIncludeCommitDiffToggle.checked = settings.pr.includeCommit;
-    prSmartDiffModeToggle.checked = settings.pr.smartDiffMode;
-    prOnlyReviewCommentsToggle.checked = settings.pr.onlyReviewComments;
-    prIgnoreResolvedCommentsToggle.checked = settings.pr.ignoreResolvedComments;
+    prDefaultPresetSelect.value = settings.pr.defaultPreset;
+    Object.keys(prCustomOptionInputs).forEach((key) => {
+      const optionKey = key as keyof ExportOptions;
+      prCustomOptionInputs[optionKey].checked = settings.pr.customOptions[optionKey];
+    });
+    updateSmartDiffControl();
 
     issueEnabledToggle.checked = settings.issue.enabled;
     issueHistoricalModeToggle.checked = settings.issue.historicalMode;
@@ -100,36 +137,19 @@ async function updateToken(token: string): Promise<void> {
 }
 
 type CommonBooleanSettingKey = 'notifications';
-type PrBooleanSettingKey =
-  | 'enabled'
-  | 'historicalMode'
-  | 'includeFileDiff'
-  | 'includeCommit'
-  | 'smartDiffMode'
-  | 'onlyReviewComments'
-  | 'ignoreResolvedComments';
-
 type IssueBooleanSettingKey = 'enabled' | 'historicalMode';
 
 function bindCommonBooleanSetting(element: HTMLInputElement, key: CommonBooleanSettingKey): void {
   element.addEventListener('change', () => {
-    updateSettings({
+    void updateSettings({
       commonSettings: { [key]: element.checked } as Partial<Settings['commonSettings']>,
-    });
-  });
-}
-
-function bindPrBooleanSetting(element: HTMLInputElement, key: PrBooleanSettingKey): void {
-  element.addEventListener('change', () => {
-    updateSettings({
-      pr: { [key]: element.checked } as Partial<Settings['pr']>,
     });
   });
 }
 
 function bindIssueBooleanSetting(element: HTMLInputElement, key: IssueBooleanSettingKey): void {
   element.addEventListener('change', () => {
-    updateSettings({
+    void updateSettings({
       issue: { [key]: element.checked } as Partial<Settings['issue']>,
     });
   });
@@ -137,8 +157,53 @@ function bindIssueBooleanSetting(element: HTMLInputElement, key: IssueBooleanSet
 
 function bindCommonThemeSetting(element: HTMLSelectElement): void {
   element.addEventListener('change', () => {
-    updateSettings({
+    void updateSettings({
       commonSettings: { theme: element.value as Settings['commonSettings']['theme'] },
+    });
+  });
+}
+
+function bindPrEnabledSetting(element: HTMLInputElement): void {
+  element.addEventListener('change', () => {
+    void updateSettings({
+      pr: { enabled: element.checked },
+    });
+  });
+}
+
+function bindPrDefaultPresetSetting(element: HTMLSelectElement): void {
+  element.addEventListener('change', () => {
+    const preset = isExportPreset(element.value) ? element.value : 'full-conversation';
+    void updateSettings({
+      pr: {
+        defaultPreset: preset,
+      },
+    });
+  });
+}
+
+function bindPrCustomOptionSetting(key: keyof ExportOptions): void {
+  const element = prCustomOptionInputs[key];
+  element.addEventListener('change', () => {
+    if (key === 'includeCommitDiffs') {
+      updateSmartDiffControl();
+      void updateSettings({
+        pr: {
+          customOptions: {
+            includeCommitDiffs: prCustomOptionInputs.includeCommitDiffs.checked,
+            smartDiffMode: prCustomOptionInputs.smartDiffMode.checked,
+          },
+        },
+      });
+      return;
+    }
+
+    void updateSettings({
+      pr: {
+        customOptions: {
+          [key]: element.checked,
+        } as Partial<ExportOptions>,
+      },
     });
   });
 }
@@ -146,14 +211,12 @@ function bindCommonThemeSetting(element: HTMLSelectElement): void {
 // Event handlers
 bindCommonBooleanSetting(commonNotificationsToggle, 'notifications');
 bindCommonThemeSetting(commonThemeSelect);
-bindPrBooleanSetting(prEnabledToggle, 'enabled');
+bindPrEnabledSetting(prEnabledToggle);
+bindPrDefaultPresetSetting(prDefaultPresetSelect);
+Object.keys(prCustomOptionInputs).forEach((key) => {
+  bindPrCustomOptionSetting(key as keyof ExportOptions);
+});
 bindIssueBooleanSetting(issueEnabledToggle, 'enabled');
-bindPrBooleanSetting(prHistoricalModeToggle, 'historicalMode');
-bindPrBooleanSetting(prIncludeFileDiffToggle, 'includeFileDiff');
-bindPrBooleanSetting(prIncludeCommitDiffToggle, 'includeCommit');
-bindPrBooleanSetting(prSmartDiffModeToggle, 'smartDiffMode');
-bindPrBooleanSetting(prOnlyReviewCommentsToggle, 'onlyReviewComments');
-bindPrBooleanSetting(prIgnoreResolvedCommentsToggle, 'ignoreResolvedComments');
 bindIssueBooleanSetting(issueHistoricalModeToggle, 'historicalMode');
 
 githubTokenToggle.addEventListener('click', () => {
@@ -163,12 +226,12 @@ githubTokenToggle.addEventListener('click', () => {
 });
 
 githubTokenInput.addEventListener('change', () => {
-  updateToken(githubTokenInput.value.trim());
+  void updateToken(githubTokenInput.value.trim());
 });
 
 // Initialize
-loadSettings();
-loadToken();
+void loadSettings();
+void loadToken();
 
 // Show version and browser type
 const manifest = adapters.runtime.getManifest();

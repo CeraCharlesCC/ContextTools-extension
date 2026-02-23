@@ -9,6 +9,19 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
 
+function readPreset(
+  value: unknown,
+  fallback: Settings['pr']['defaultPreset']
+): Settings['pr']['defaultPreset'] {
+  return value === 'full-conversation' ||
+    value === 'with-diffs' ||
+    value === 'review-comments-only' ||
+    value === 'commit-log' ||
+    value === 'custom'
+    ? value
+    : fallback;
+}
+
 function readTheme(
   value: unknown,
   fallback: Settings['commonSettings']['theme']
@@ -46,12 +59,45 @@ export class UpdateSettingsUseCase {
       },
       pr: {
         enabled: readBoolean(pr.enabled, current.pr.enabled),
-        historicalMode: readBoolean(pr.historicalMode, current.pr.historicalMode),
-        includeFileDiff: readBoolean(pr.includeFileDiff, current.pr.includeFileDiff),
-        includeCommit: readBoolean(pr.includeCommit, current.pr.includeCommit),
-        smartDiffMode: readBoolean(pr.smartDiffMode, current.pr.smartDiffMode),
-        onlyReviewComments: readBoolean(pr.onlyReviewComments, current.pr.onlyReviewComments),
-        ignoreResolvedComments: readBoolean(pr.ignoreResolvedComments, current.pr.ignoreResolvedComments),
+        defaultPreset: readPreset(pr.defaultPreset, current.pr.defaultPreset),
+        customOptions: {
+          includeIssueComments: readBoolean(
+            isRecord(pr.customOptions) ? pr.customOptions.includeIssueComments : undefined,
+            current.pr.customOptions.includeIssueComments
+          ),
+          includeReviewComments: readBoolean(
+            isRecord(pr.customOptions) ? pr.customOptions.includeReviewComments : undefined,
+            current.pr.customOptions.includeReviewComments
+          ),
+          includeReviews: readBoolean(
+            isRecord(pr.customOptions) ? pr.customOptions.includeReviews : undefined,
+            current.pr.customOptions.includeReviews
+          ),
+          includeCommits: readBoolean(
+            isRecord(pr.customOptions) ? pr.customOptions.includeCommits : undefined,
+            current.pr.customOptions.includeCommits
+          ),
+          includeFileDiffs: readBoolean(
+            isRecord(pr.customOptions) ? pr.customOptions.includeFileDiffs : undefined,
+            current.pr.customOptions.includeFileDiffs
+          ),
+          includeCommitDiffs: readBoolean(
+            isRecord(pr.customOptions) ? pr.customOptions.includeCommitDiffs : undefined,
+            current.pr.customOptions.includeCommitDiffs
+          ),
+          smartDiffMode: readBoolean(
+            isRecord(pr.customOptions) ? pr.customOptions.smartDiffMode : undefined,
+            current.pr.customOptions.smartDiffMode
+          ),
+          timelineMode: readBoolean(
+            isRecord(pr.customOptions) ? pr.customOptions.timelineMode : undefined,
+            current.pr.customOptions.timelineMode
+          ),
+          ignoreResolvedComments: readBoolean(
+            isRecord(pr.customOptions) ? pr.customOptions.ignoreResolvedComments : undefined,
+            current.pr.customOptions.ignoreResolvedComments
+          ),
+        },
       },
       issue: {
         enabled: readBoolean(issue.enabled, current.issue.enabled),

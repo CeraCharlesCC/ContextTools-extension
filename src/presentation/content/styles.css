@@ -143,6 +143,101 @@
   margin-left: 8px;
 }
 
+.context-tools-dropdown-select-row {
+  gap: 8px;
+}
+
+.context-tools-dropdown-select {
+  min-width: 150px;
+  padding: 4px 8px;
+  border: 1px solid var(--borderColor-default, var(--color-border-default, rgba(27, 31, 36, 0.15)));
+  border-radius: 6px;
+  background: var(--overlay-bgColor, var(--color-canvas-overlay, var(--color-canvas-default, #fff)));
+  color: var(--fgColor-default, var(--color-fg-default, #1f2328));
+  font-size: 12px;
+}
+
+.context-tools-dropdown-select:focus {
+  outline: none;
+  border-color: var(--fgColor-accent, var(--color-accent-fg, #0969da));
+}
+
+.context-tools-dropdown-static-row {
+  cursor: default;
+}
+
+.context-tools-dropdown-static-row:hover {
+  background: none;
+}
+
+.context-tools-dropdown-static-value {
+  color: var(--fgColor-muted, var(--color-fg-muted, #57606a));
+  font-weight: 500;
+}
+
+.context-tools-dropdown-advanced {
+  margin: 4px 0 0;
+}
+
+.context-tools-dropdown-advanced-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fgColor-default, var(--color-fg-default, #1f2328));
+  cursor: pointer;
+  list-style: none;
+}
+
+.context-tools-dropdown-advanced-summary::-webkit-details-marker {
+  display: none;
+}
+
+.context-tools-dropdown-advanced-summary::after {
+  content: "▾";
+  color: var(--fgColor-muted, var(--color-fg-muted, #57606a));
+  transition: transform 0.15s ease;
+}
+
+.context-tools-dropdown-advanced:not([open]) .context-tools-dropdown-advanced-summary::after {
+  transform: rotate(-90deg);
+}
+
+.context-tools-dropdown-advanced-content {
+  padding: 0 0 4px;
+}
+
+.context-tools-dropdown-group {
+  padding: 2px 0 4px;
+}
+
+.context-tools-dropdown-group + .context-tools-dropdown-group {
+  border-top: 1px solid var(--borderColor-muted, var(--color-border-muted, rgba(27, 31, 36, 0.08)));
+}
+
+.context-tools-dropdown-group-title {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fgColor-muted, var(--color-fg-muted, #57606a));
+  text-transform: uppercase;
+}
+
+.context-tools-dropdown-item-toggle {
+  user-select: none;
+}
+
+.context-tools-dropdown-item-disabled {
+  color: var(--fgColor-muted, var(--color-fg-muted, #6e7781));
+  cursor: default;
+}
+
+.context-tools-dropdown-item-disabled:hover {
+  background: none;
+}
+
 .context-tools-dropdown-action {
   width: 100%;
   border: none;

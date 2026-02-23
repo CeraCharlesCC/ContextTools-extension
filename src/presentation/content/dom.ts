@@ -3,6 +3,8 @@
  * Pure DOM creation / query functions, no application state.
  */
 import type { Marker, MarkerRange } from '@shared/github';
+import type { ExportOptions, ExportPreset } from '@domain/entities';
+import type { PullExportState } from './export-state';
 import contentStyles from './styles.css?raw';
 
 // ---------------------------------------------------------------------------
@@ -125,26 +127,110 @@ export function updateCopyButtonLabel(
 // Settings dropdown
 // ---------------------------------------------------------------------------
 
-export interface DropdownOptions {
-    isPull: boolean;
-    historicalMode: boolean;
-    includeFileDiff: boolean;
-    includeCommit: boolean;
-    smartDiffMode: boolean;
-    onlyReviewComments: boolean;
-    ignoreResolvedComments: boolean;
-    onHistoricalModeChange: (checked: boolean) => void;
-    onIncludeFileDiffChange: (checked: boolean) => void;
-    onIncludeCommitChange: (checked: boolean) => void;
-    onSmartDiffModeChange: (checked: boolean) => void;
-    onOnlyReviewCommentsChange: (checked: boolean) => void;
-    onIgnoreResolvedCommentsChange: (checked: boolean) => void;
+interface DropdownBaseOptions {
     onResetMarkers: () => void;
 }
+
+export interface PullDropdownOptions extends DropdownBaseOptions {
+    kind: 'pull';
+    pullState: PullExportState;
+    onPullPresetChange: (preset: ExportPreset) => PullExportState;
+    onPullAdvancedToggle: (option: keyof ExportOptions, checked: boolean) => PullExportState;
+}
+
+export interface IssueDropdownOptions extends DropdownBaseOptions {
+    kind: 'issue';
+    timelineMode: boolean;
+    onIssueTimelineModeChange: (checked: boolean) => void;
+}
+
+export type DropdownOptions = PullDropdownOptions | IssueDropdownOptions;
 
 export interface DropdownResult {
     dropdown: HTMLDivElement;
     resetMarkersButton: HTMLButtonElement;
+}
+
+interface DropdownToggleControl {
+    row: HTMLLabelElement;
+    input: HTMLInputElement;
+}
+
+const pullPresetLabels: Array<{ value: ExportPreset; label: string }> = [
+    { value: 'full-conversation', label: 'Full conversation' },
+    { value: 'with-diffs', label: 'With diffs' },
+    { value: 'review-comments-only', label: 'Review comments only' },
+    { value: 'commit-log', label: 'Commit log' },
+    { value: 'custom', label: 'Custom' },
+];
+
+const pullOptionGroups: Array<{
+    title: string;
+    options: Array<{ key: keyof ExportOptions; label: string }>;
+}> = [
+    {
+        title: 'Content',
+        options: [
+            { key: 'includeIssueComments', label: 'Include issue comments' },
+            { key: 'includeReviewComments', label: 'Include review comments' },
+            { key: 'includeReviews', label: 'Include reviews' },
+            { key: 'includeCommits', label: 'Include commits' },
+        ],
+    },
+    {
+        title: 'Diffs',
+        options: [
+            { key: 'includeFileDiffs', label: 'Include file diffs' },
+            { key: 'includeCommitDiffs', label: 'Include commit diffs' },
+            { key: 'smartDiffMode', label: 'Smart diff mode' },
+        ],
+    },
+    {
+        title: 'Ordering',
+        options: [{ key: 'timelineMode', label: 'Timeline mode' }],
+    },
+    {
+        title: 'Filters',
+        options: [{ key: 'ignoreResolvedComments', label: 'Ignore resolved comments' }],
+    },
+];
+
+function createToggleControl(params: {
+    label: string;
+    checked: boolean;
+    id: string;
+}): DropdownToggleControl {
+    const row = document.createElement('label');
+    row.className = 'context-tools-dropdown-item context-tools-dropdown-item-toggle';
+
+    const text = document.createElement('span');
+    text.textContent = params.label;
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.id = params.id;
+    input.checked = params.checked;
+
+    row.append(text, input);
+    return { row, input };
+}
+
+function createAdvancedContainer(title = 'Advanced'): {
+    details: HTMLDetailsElement;
+    content: HTMLDivElement;
+} {
+    const details = document.createElement('details');
+    details.className = 'context-tools-dropdown-advanced';
+
+    const summary = document.createElement('summary');
+    summary.className = 'context-tools-dropdown-advanced-summary';
+    summary.textContent = title;
+
+    const content = document.createElement('div');
+    content.className = 'context-tools-dropdown-advanced-content';
+
+    details.append(summary, content);
+    return { details, content };
 }
 
 export function createSettingsDropdown(opts: DropdownOptions): DropdownResult {
@@ -157,90 +243,133 @@ export function createSettingsDropdown(opts: DropdownOptions): DropdownResult {
     header.textContent = 'Export Options';
     dropdown.appendChild(header);
 
-    // Historical mode toggle
-    const historicalItem = document.createElement('label');
-    historicalItem.className = 'context-tools-dropdown-item';
-    historicalItem.innerHTML = `
-    <span>Timeline mode</span>
-    <input type="checkbox" id="context-tools-historical" ${opts.historicalMode ? 'checked' : ''}>
-  `;
-    const historicalCheckbox = historicalItem.querySelector('input') as HTMLInputElement;
-    historicalCheckbox.addEventListener('change', () => {
-        opts.onHistoricalModeChange(historicalCheckbox.checked);
-    });
-    dropdown.appendChild(historicalItem);
+    if (opts.kind === 'pull') {
+        const presetRow = document.createElement('label');
+        presetRow.className = 'context-tools-dropdown-item context-tools-dropdown-select-row';
 
-    if (opts.isPull) {
-        // Include file diff toggle
-        const fileDiffItem = document.createElement('label');
-        fileDiffItem.className = 'context-tools-dropdown-item';
-        fileDiffItem.innerHTML = `
-    <span>Include file diffs</span>
-    <input type="checkbox" id="context-tools-file-diff" ${opts.includeFileDiff ? 'checked' : ''}>
-  `;
-        const fileDiffCheckbox = fileDiffItem.querySelector('input') as HTMLInputElement;
-        fileDiffCheckbox.addEventListener('change', () => {
-            opts.onIncludeFileDiffChange(fileDiffCheckbox.checked);
-        });
-        dropdown.appendChild(fileDiffItem);
+        const presetLabel = document.createElement('span');
+        presetLabel.textContent = 'Preset';
 
-        // Include commit diff toggle
-        const commitDiffItem = document.createElement('label');
-        commitDiffItem.className = 'context-tools-dropdown-item';
-        commitDiffItem.innerHTML = `
-    <span>Include commit diffs</span>
-    <input type="checkbox" id="context-tools-commit-diff" ${opts.includeCommit ? 'checked' : ''}>
-  `;
-        const commitDiffCheckbox = commitDiffItem.querySelector('input') as HTMLInputElement;
-        commitDiffCheckbox.addEventListener('change', () => {
-            opts.onIncludeCommitChange(commitDiffCheckbox.checked);
-        });
-        dropdown.appendChild(commitDiffItem);
-    }
+        const presetSelect = document.createElement('select');
+        presetSelect.className = 'context-tools-dropdown-select';
 
-    if (opts.isPull) {
-        // Smart diff mode toggle
-        const smartDiffItem = document.createElement('label');
-        smartDiffItem.className = 'context-tools-dropdown-item';
-        smartDiffItem.innerHTML = `
-    <span>Smart diff mode</span>
-    <input type="checkbox" id="context-tools-smart-diff" ${opts.smartDiffMode ? 'checked' : ''}>
-  `;
-        const smartDiffCheckbox = smartDiffItem.querySelector('input') as HTMLInputElement;
-        smartDiffCheckbox.addEventListener('change', () => {
-            opts.onSmartDiffModeChange(smartDiffCheckbox.checked);
+        pullPresetLabels.forEach((preset) => {
+            const option = document.createElement('option');
+            option.value = preset.value;
+            option.textContent = preset.label;
+            presetSelect.appendChild(option);
         });
-        dropdown.appendChild(smartDiffItem);
 
-        // Only review comments mode toggle
-        const onlyReviewCommentsItem = document.createElement('label');
-        onlyReviewCommentsItem.className = 'context-tools-dropdown-item';
-        const onlyReviewCommentsSpan = document.createElement('span');
-        onlyReviewCommentsSpan.textContent = 'Only review comments (PR only)';
-        const onlyReviewCommentsCheckbox = document.createElement('input');
-        onlyReviewCommentsCheckbox.type = 'checkbox';
-        onlyReviewCommentsCheckbox.id = 'context-tools-only-review-comments';
-        onlyReviewCommentsCheckbox.checked = opts.onlyReviewComments;
-        onlyReviewCommentsCheckbox.addEventListener('change', () => {
-            opts.onOnlyReviewCommentsChange(onlyReviewCommentsCheckbox.checked);
-        });
-        onlyReviewCommentsItem.append(onlyReviewCommentsSpan, onlyReviewCommentsCheckbox);
-        dropdown.appendChild(onlyReviewCommentsItem);
+        presetRow.append(presetLabel, presetSelect);
+        dropdown.appendChild(presetRow);
 
-        // Ignore resolved comments mode toggle
-        const ignoreResolvedCommentsItem = document.createElement('label');
-        ignoreResolvedCommentsItem.className = 'context-tools-dropdown-item';
-        const ignoreResolvedCommentsSpan = document.createElement('span');
-        ignoreResolvedCommentsSpan.textContent = 'Ignore resolved comments (PR only)';
-        const ignoreResolvedCommentsCheckbox = document.createElement('input');
-        ignoreResolvedCommentsCheckbox.type = 'checkbox';
-        ignoreResolvedCommentsCheckbox.id = 'context-tools-ignore-resolved-comments';
-        ignoreResolvedCommentsCheckbox.checked = opts.ignoreResolvedComments;
-        ignoreResolvedCommentsCheckbox.addEventListener('change', () => {
-            opts.onIgnoreResolvedCommentsChange(ignoreResolvedCommentsCheckbox.checked);
+        const optionInputs: Partial<Record<keyof ExportOptions, HTMLInputElement>> = {};
+        const optionRows: Partial<Record<keyof ExportOptions, HTMLLabelElement>> = {};
+
+        const { details: advancedDetails, content: advancedContent } = createAdvancedContainer();
+
+        const syncPullControls = (state: PullExportState): void => {
+            presetSelect.value = state.preset;
+
+            Object.keys(optionInputs).forEach((key) => {
+                const optionKey = key as keyof ExportOptions;
+                const input = optionInputs[optionKey];
+                if (!input) return;
+                input.checked = state.customOptions[optionKey];
+            });
+
+            const smartDiffInput = optionInputs.smartDiffMode;
+            const smartDiffRow = optionRows.smartDiffMode;
+            if (smartDiffInput && smartDiffRow) {
+                const enabled = state.customOptions.includeCommitDiffs;
+                const tooltip = 'Enable “Include commit diffs” to use Smart diff mode.';
+
+                smartDiffInput.disabled = !enabled;
+                if (!enabled) {
+                    smartDiffInput.checked = false;
+                    smartDiffInput.title = tooltip;
+                    smartDiffRow.title = tooltip;
+                } else {
+                    smartDiffInput.removeAttribute('title');
+                    smartDiffRow.removeAttribute('title');
+                }
+                smartDiffRow.classList.toggle('context-tools-dropdown-item-disabled', !enabled);
+            }
+        };
+
+        pullOptionGroups.forEach((group) => {
+            const groupEl = document.createElement('div');
+            groupEl.className = 'context-tools-dropdown-group';
+
+            const groupTitle = document.createElement('div');
+            groupTitle.className = 'context-tools-dropdown-group-title';
+            groupTitle.textContent = group.title;
+
+            groupEl.appendChild(groupTitle);
+
+            group.options.forEach((option) => {
+                const control = createToggleControl({
+                    label: option.label,
+                    checked: opts.pullState.customOptions[option.key],
+                    id: `context-tools-${option.key}`,
+                });
+
+                control.input.addEventListener('change', () => {
+                    const nextState = opts.onPullAdvancedToggle(option.key, control.input.checked);
+                    syncPullControls(nextState);
+                });
+
+                optionInputs[option.key] = control.input;
+                optionRows[option.key] = control.row;
+                groupEl.appendChild(control.row);
+            });
+
+            advancedContent.appendChild(groupEl);
         });
-        ignoreResolvedCommentsItem.append(ignoreResolvedCommentsSpan, ignoreResolvedCommentsCheckbox);
-        dropdown.appendChild(ignoreResolvedCommentsItem);
+
+        presetSelect.addEventListener('change', () => {
+            const nextState = opts.onPullPresetChange(presetSelect.value as ExportPreset);
+            syncPullControls(nextState);
+            advancedDetails.open = false;
+        });
+
+        syncPullControls(opts.pullState);
+        dropdown.appendChild(advancedDetails);
+    } else {
+        const presetRow = document.createElement('div');
+        presetRow.className = 'context-tools-dropdown-item context-tools-dropdown-static-row';
+
+        const presetLabel = document.createElement('span');
+        presetLabel.textContent = 'Preset';
+
+        const presetValue = document.createElement('span');
+        presetValue.className = 'context-tools-dropdown-static-value';
+        presetValue.textContent = 'Full conversation';
+
+        presetRow.append(presetLabel, presetValue);
+        dropdown.appendChild(presetRow);
+
+        const { details: advancedDetails, content: advancedContent } = createAdvancedContainer();
+        const timelineControl = createToggleControl({
+            label: 'Timeline mode',
+            checked: opts.timelineMode,
+            id: 'context-tools-issue-timeline-mode',
+        });
+
+        timelineControl.input.addEventListener('change', () => {
+            opts.onIssueTimelineModeChange(timelineControl.input.checked);
+        });
+
+        const groupEl = document.createElement('div');
+        groupEl.className = 'context-tools-dropdown-group';
+
+        const groupTitle = document.createElement('div');
+        groupTitle.className = 'context-tools-dropdown-group-title';
+        groupTitle.textContent = 'Ordering';
+
+        groupEl.append(groupTitle, timelineControl.row);
+        advancedContent.appendChild(groupEl);
+        dropdown.appendChild(advancedDetails);
     }
 
     const divider = document.createElement('div');
@@ -277,6 +406,7 @@ export function createCopyButtonGroup(
 ): CopyButtonGroupResult {
     const group = document.createElement('div');
     group.className = 'context-tools-button-group';
+    group.dataset.contextTools = 'button-group';
     group.style.position = 'relative';
 
     const button = document.createElement('button');

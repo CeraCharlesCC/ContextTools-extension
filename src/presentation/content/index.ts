@@ -4,8 +4,19 @@
  */
 import { getBrowserAdapters } from '@infrastructure/adapters';
 import { copyToClipboard, findMarkerInElement, parsePageRef } from '@shared/github';
-import type { GenerateMarkdownResult, Marker, MarkerRange, PageRef } from '@shared/github';
-import type { Settings } from '@domain/entities';
+import type {
+  GenerateMarkdownPayload,
+  GenerateMarkdownResult,
+  Marker,
+  MarkerRange,
+  PageRef,
+} from '@shared/github';
+import {
+  createDefaultCustomOptions,
+  type ExportOptions,
+  type ExportPreset,
+  type Settings,
+} from '@domain/entities';
 import {
   ensureStyles,
   showToast,
@@ -20,6 +31,12 @@ import {
   findMenuItemTemplate,
 } from './dom';
 import type { DropdownOptions } from './dom';
+import {
+  applyAdvancedToggle,
+  applyPresetSelection,
+  createPullExportState,
+  type PullExportState,
+} from './export-state';
 
 const adapters = getBrowserAdapters();
 
@@ -39,38 +56,54 @@ let isCopying = false;
 let prEnabled = true;
 let issueEnabled = true;
 
-// Temporary export settings (overrides for current copy operation)
-let tempHistoricalMode: boolean | null = null;
-let tempIncludeFileDiff: boolean | null = null;
-let tempIncludeCommit: boolean | null = null;
-let tempSmartDiffMode: boolean | null = null;
-let tempOnlyReviewComments: boolean | null = null;
-let tempIgnoreResolvedComments: boolean | null = null;
+let tempPullState: PullExportState | null = null;
+let tempIssueTimelineMode: boolean | null = null;
+let lastPullState: PullExportState | null = null;
+let lastIssueTimelineMode: boolean | null = null;
 
 type PrExportDefaults = {
-  historicalMode: boolean;
-  includeFileDiff: boolean;
-  includeCommit: boolean;
-  smartDiffMode: boolean;
-  onlyReviewComments: boolean;
-  ignoreResolvedComments: boolean;
+  defaultPreset: ExportPreset;
+  customOptions: ExportOptions;
 };
 
 type IssueExportDefaults = {
-  historicalMode: boolean;
+  timelineMode: boolean;
 };
 
 let defaultPrSettings: PrExportDefaults = {
-  historicalMode: true,
-  includeFileDiff: false,
-  includeCommit: false,
-  smartDiffMode: false,
-  onlyReviewComments: false,
-  ignoreResolvedComments: false,
+  defaultPreset: 'full-conversation',
+  customOptions: createDefaultCustomOptions(),
 };
 
 let defaultIssueSettings: IssueExportDefaults = {
-  historicalMode: true,
+  timelineMode: true,
+};
+
+type LastExportStateKind = 'pull' | 'issue';
+
+interface PullLastExportStatePayload {
+  preset: ExportPreset;
+  customOptions: Partial<ExportOptions>;
+}
+
+interface IssueLastExportStatePayload {
+  timelineMode: boolean;
+}
+
+const customOptionKeys: ReadonlyArray<keyof ExportOptions> = [
+  'includeIssueComments',
+  'includeReviewComments',
+  'includeReviews',
+  'includeCommits',
+  'includeFileDiffs',
+  'includeCommitDiffs',
+  'smartDiffMode',
+  'timelineMode',
+  'ignoreResolvedComments',
+];
+
+type MutableExportOptions = {
+  -readonly [K in keyof ExportOptions]: ExportOptions[K];
 };
 
 // Observer state for throttling and cleanup
@@ -108,19 +141,168 @@ function resetMarkerRange(): void {
   showToast('Markers cleared.');
 }
 
-function resolveDefaultExportOptions() {
-  if (currentPage?.kind === 'pull') {
-    return { ...defaultPrSettings };
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function readBoolean(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null;
+}
+
+function readPreset(value: unknown): ExportPreset | null {
+  return value === 'full-conversation' ||
+    value === 'with-diffs' ||
+    value === 'review-comments-only' ||
+    value === 'commit-log' ||
+    value === 'custom'
+    ? value
+    : null;
+}
+
+function cloneOptions(options: ExportOptions): ExportOptions {
+  return {
+    includeIssueComments: options.includeIssueComments,
+    includeReviewComments: options.includeReviewComments,
+    includeReviews: options.includeReviews,
+    includeCommits: options.includeCommits,
+    includeFileDiffs: options.includeFileDiffs,
+    includeCommitDiffs: options.includeCommitDiffs,
+    smartDiffMode: options.smartDiffMode,
+    timelineMode: options.timelineMode,
+    ignoreResolvedComments: options.ignoreResolvedComments,
+  };
+}
+
+function sanitizeCustomOptions(value: unknown): Partial<ExportOptions> {
+  if (!isRecord(value)) {
+    return {};
   }
 
-  return {
-    historicalMode: defaultIssueSettings.historicalMode,
-    includeFileDiff: false,
-    includeCommit: false,
-    smartDiffMode: false,
-    onlyReviewComments: false,
-    ignoreResolvedComments: false,
+  const sanitized: Partial<MutableExportOptions> = {};
+  customOptionKeys.forEach((key) => {
+    const parsed = readBoolean(value[key]);
+    if (typeof parsed === 'boolean') {
+      sanitized[key] = parsed;
+    }
+  });
+
+  return sanitized as Partial<ExportOptions>;
+}
+
+function parsePullLastExportState(value: unknown): PullExportState | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const preset = readPreset(value.preset);
+  if (!preset) {
+    return null;
+  }
+
+  return createPullExportState(preset, sanitizeCustomOptions(value.customOptions));
+}
+
+function parseIssueLastExportState(value: unknown): IssueLastExportStatePayload | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const timelineMode = readBoolean(value.timelineMode);
+  if (typeof timelineMode !== 'boolean') {
+    return null;
+  }
+
+  return { timelineMode };
+}
+
+function resolveDefaultPullState(): PullExportState {
+  return createPullExportState(defaultPrSettings.defaultPreset, defaultPrSettings.customOptions);
+}
+
+function resolveCurrentPullState(): PullExportState {
+  if (tempPullState) {
+    return tempPullState;
+  }
+  if (lastPullState) {
+    return lastPullState;
+  }
+  return resolveDefaultPullState();
+}
+
+function resolveCurrentIssueTimelineMode(): boolean {
+  if (typeof tempIssueTimelineMode === 'boolean') {
+    return tempIssueTimelineMode;
+  }
+  if (typeof lastIssueTimelineMode === 'boolean') {
+    return lastIssueTimelineMode;
+  }
+  return defaultIssueSettings.timelineMode;
+}
+
+async function getLastExportState(kind: LastExportStateKind): Promise<unknown> {
+  return adapters.messaging.sendMessage<
+    {
+      type: 'GET_LAST_EXPORT_STATE';
+      payload: {
+        kind: LastExportStateKind;
+      };
+    },
+    unknown
+  >({
+    type: 'GET_LAST_EXPORT_STATE',
+    payload: { kind },
+  });
+}
+
+async function setLastExportState(kind: LastExportStateKind, state: unknown): Promise<void> {
+  await adapters.messaging.sendMessage<
+    {
+      type: 'SET_LAST_EXPORT_STATE';
+      payload: {
+        kind: LastExportStateKind;
+        state: unknown;
+      };
+    },
+    { ok: boolean }
+  >({
+    type: 'SET_LAST_EXPORT_STATE',
+    payload: {
+      kind,
+      state,
+    },
+  });
+}
+
+async function loadLastExportStates(): Promise<void> {
+  const [pullState, issueState] = await Promise.all([
+    getLastExportState('pull'),
+    getLastExportState('issue'),
+  ]);
+
+  const parsedPullState = parsePullLastExportState(pullState);
+  if (parsedPullState) {
+    lastPullState = parsedPullState;
+  }
+
+  const parsedIssueState = parseIssueLastExportState(issueState);
+  if (parsedIssueState) {
+    lastIssueTimelineMode = parsedIssueState.timelineMode;
+  }
+}
+
+async function persistPullLastExportState(state: PullExportState): Promise<void> {
+  const payload: PullLastExportStatePayload = {
+    preset: state.preset,
+    customOptions: cloneOptions(state.customOptions),
   };
+  await setLastExportState('pull', payload);
+}
+
+async function persistIssueLastExportState(timelineMode: boolean): Promise<void> {
+  const payload: IssueLastExportStatePayload = {
+    timelineMode,
+  };
+  await setLastExportState('issue', payload);
 }
 
 function resolveCurrentPageEnabled(): boolean {
@@ -136,47 +318,29 @@ async function handleCopyClick(): Promise<void> {
     copyButton.disabled = true;
   }
 
-  // Use temporary overrides if set, otherwise use defaults
-  const defaults = resolveDefaultExportOptions();
-  const historicalMode = tempHistoricalMode ?? defaults.historicalMode;
-  const smartDiffMode = tempSmartDiffMode ?? defaults.smartDiffMode;
-
-  const payload: {
-    page: PageRef;
-    range?: MarkerRange;
-    historicalMode?: boolean;
-    includeFiles?: boolean;
-    includeCommit?: boolean;
-    smartDiffMode?: boolean;
-    onlyReviewComments?: boolean;
-    ignoreResolvedComments?: boolean;
-  } = {
+  const payload: GenerateMarkdownPayload = {
     page: currentPage,
     range: markerRange,
-    historicalMode,
   };
 
+  let copiedPullState: PullExportState | null = null;
+  let copiedIssueTimelineMode: boolean | null = null;
+
   if (currentPage.kind === 'pull') {
-    payload.includeFiles = tempIncludeFileDiff ?? defaults.includeFileDiff;
-    payload.includeCommit = tempIncludeCommit ?? defaults.includeCommit;
-    payload.smartDiffMode = smartDiffMode;
-    payload.onlyReviewComments = tempOnlyReviewComments ?? defaults.onlyReviewComments;
-    payload.ignoreResolvedComments = tempIgnoreResolvedComments ?? defaults.ignoreResolvedComments;
+    copiedPullState = resolveCurrentPullState();
+    payload.preset = copiedPullState.preset;
+    payload.customOptions = cloneOptions(copiedPullState.customOptions);
+  } else {
+    copiedIssueTimelineMode = resolveCurrentIssueTimelineMode();
+    payload.customOptions = {
+      timelineMode: copiedIssueTimelineMode,
+    };
   }
 
   try {
     const result = await adapters.messaging.sendMessage<{
-      type: string;
-      payload: {
-        page: PageRef;
-        range?: MarkerRange;
-        historicalMode?: boolean;
-        includeFiles?: boolean;
-        includeCommit?: boolean;
-        smartDiffMode?: boolean;
-        onlyReviewComments?: boolean;
-        ignoreResolvedComments?: boolean;
-      };
+      type: 'GENERATE_MARKDOWN';
+      payload: GenerateMarkdownPayload;
     }, GenerateMarkdownResult>({
       type: 'GENERATE_MARKDOWN',
       payload,
@@ -188,6 +352,27 @@ async function handleCopyClick(): Promise<void> {
     }
 
     await copyToClipboard(result.markdown);
+
+    if (currentPage.kind === 'pull' && copiedPullState) {
+      tempPullState = copiedPullState;
+      lastPullState = copiedPullState;
+      try {
+        await persistPullLastExportState(copiedPullState);
+      } catch (error) {
+        console.warn('Failed to persist pull export state:', error);
+      }
+    }
+
+    if (currentPage.kind === 'issue' && typeof copiedIssueTimelineMode === 'boolean') {
+      tempIssueTimelineMode = copiedIssueTimelineMode;
+      lastIssueTimelineMode = copiedIssueTimelineMode;
+      try {
+        await persistIssueLastExportState(copiedIssueTimelineMode);
+      } catch (error) {
+        console.warn('Failed to persist issue export state:', error);
+      }
+    }
+
     showToast('Copied Markdown to clipboard.');
     if (result.warning) {
       showToast(result.warning, 'warning');
@@ -203,23 +388,30 @@ async function handleCopyClick(): Promise<void> {
 }
 
 function buildDropdownOptions(): DropdownOptions {
-  const isPull = currentPage?.kind === 'pull';
-  const defaults = resolveDefaultExportOptions();
+  if (currentPage?.kind === 'pull') {
+    return {
+      kind: 'pull',
+      pullState: resolveCurrentPullState(),
+      onPullPresetChange: (preset) => {
+        const nextState = applyPresetSelection(resolveCurrentPullState(), preset);
+        tempPullState = nextState;
+        return nextState;
+      },
+      onPullAdvancedToggle: (option, checked) => {
+        const nextState = applyAdvancedToggle(resolveCurrentPullState(), option, checked);
+        tempPullState = nextState;
+        return nextState;
+      },
+      onResetMarkers: resetMarkerRange,
+    };
+  }
 
   return {
-    isPull,
-    historicalMode: tempHistoricalMode ?? defaults.historicalMode,
-    includeFileDiff: isPull ? tempIncludeFileDiff ?? defaults.includeFileDiff : false,
-    includeCommit: isPull ? tempIncludeCommit ?? defaults.includeCommit : false,
-    smartDiffMode: tempSmartDiffMode ?? defaults.smartDiffMode,
-    onlyReviewComments: isPull ? tempOnlyReviewComments ?? defaults.onlyReviewComments : false,
-    ignoreResolvedComments: isPull ? tempIgnoreResolvedComments ?? defaults.ignoreResolvedComments : false,
-    onHistoricalModeChange: (checked) => { tempHistoricalMode = checked; },
-    onIncludeFileDiffChange: (checked) => { tempIncludeFileDiff = checked; },
-    onIncludeCommitChange: (checked) => { tempIncludeCommit = checked; },
-    onSmartDiffModeChange: (checked) => { tempSmartDiffMode = checked; },
-    onOnlyReviewCommentsChange: (checked) => { tempOnlyReviewComments = checked; },
-    onIgnoreResolvedCommentsChange: (checked) => { tempIgnoreResolvedComments = checked; },
+    kind: 'issue',
+    timelineMode: resolveCurrentIssueTimelineMode(),
+    onIssueTimelineModeChange: (checked) => {
+      tempIssueTimelineMode = checked;
+    },
     onResetMarkers: resetMarkerRange,
   };
 }
@@ -394,7 +586,12 @@ function handlePageChange(): void {
   if (!currentPage || !resolveCurrentPageEnabled()) {
     const existing = document.querySelector(COPY_BUTTON_SELECTOR);
     if (existing) {
-      existing.remove();
+      const existingGroup = existing.closest('[data-context-tools="button-group"]');
+      if (existingGroup) {
+        existingGroup.remove();
+      } else {
+        existing.remove();
+      }
     }
     copyButton = null;
     return;
@@ -417,20 +614,24 @@ async function init(): Promise<void> {
     issueEnabled = settings?.issue.enabled ?? true;
     isEnabled = prEnabled || issueEnabled;
     if (!isEnabled) return;
-    // Load markdown export defaults from settings
+
     defaultPrSettings = {
-      historicalMode: settings?.pr.historicalMode ?? true,
-      includeFileDiff: settings?.pr.includeFileDiff ?? false,
-      includeCommit: settings?.pr.includeCommit ?? false,
-      smartDiffMode: settings?.pr.smartDiffMode ?? false,
-      onlyReviewComments: settings?.pr.onlyReviewComments ?? false,
-      ignoreResolvedComments: settings?.pr.ignoreResolvedComments ?? false,
+      defaultPreset: settings?.pr.defaultPreset ?? 'full-conversation',
+      customOptions: {
+        ...(settings?.pr.customOptions ?? createDefaultCustomOptions()),
+      },
     };
     defaultIssueSettings = {
-      historicalMode: settings?.issue.historicalMode ?? true,
+      timelineMode: settings?.issue.historicalMode ?? true,
     };
   } catch {
     // Default to enabled if settings are unavailable.
+  }
+
+  try {
+    await loadLastExportStates();
+  } catch {
+    // Continue with default settings when runtime state is unavailable.
   }
 
   ensureStyles();
