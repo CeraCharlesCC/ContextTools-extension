@@ -450,96 +450,111 @@ export function createCopyButtonGroup(
 // Anchor-button finders (where to insert the copy-button group)
 // ---------------------------------------------------------------------------
 
-export function findIssueAnchorButton(): HTMLElement | null {
-    const actionsContainer = document.querySelector(
-        '[data-component="PH_Actions"] [class*="HeaderMenu-module__menuActionsContainer"]',
-    );
-    if (actionsContainer?.firstElementChild) {
-        return actionsContainer.firstElementChild as HTMLElement;
+const ACTION_CONTROL_SELECTOR = 'button, summary, [role="button"], a[href]';
+
+function normalizeLabel(text: string | null | undefined): string {
+    return (text ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function getControlLabel(control: HTMLElement): string {
+    const ariaLabel = normalizeLabel(control.getAttribute('aria-label'));
+    if (ariaLabel) return ariaLabel;
+
+    const labelledBy = control.getAttribute('aria-labelledby');
+    if (labelledBy) {
+        const labelledText = labelledBy
+            .split(/\s+/)
+            .map((id) => control.ownerDocument.getElementById(id)?.textContent ?? '')
+            .join(' ');
+        const normalized = normalizeLabel(labelledText);
+        if (normalized) return normalized;
     }
 
-    const header =
-        document.querySelector('#partial-discussion-header') ??
-        document.querySelector('.gh-header');
-    const copyIcon =
-        header?.querySelector('button svg.octicon-copy') ??
-        document.querySelector('button svg.octicon-copy');
-    if (copyIcon) return copyIcon.closest('button');
+    return normalizeLabel(control.textContent);
+}
 
-    const newIssueButton = findNewIssueButton();
-    if (newIssueButton) return newIssueButton;
+function isActionControl(control: HTMLElement): boolean {
+    if (control.dataset.contextTools) return false;
+    if (control.closest('[data-context-tools="button-group"]')) return false;
+    if (control.closest('[role="menu"], details-menu[role="menu"]')) return false;
+    if (control.hidden) return false;
+    if (control.closest('[hidden], [aria-hidden="true"]')) return false;
+    if (control.getClientRects().length === 0) return false;
+    return true;
+}
 
+function findControlByLabel(scope: ParentNode, pattern: RegExp): HTMLElement | null {
+    const controls = Array.from(scope.querySelectorAll<HTMLElement>(ACTION_CONTROL_SELECTOR));
+    return controls.find((control) => isActionControl(control) && pattern.test(getControlLabel(control))) ?? null;
+}
+
+function findFirstActionControl(scope: ParentNode): HTMLElement | null {
+    const controls = Array.from(scope.querySelectorAll<HTMLElement>(ACTION_CONTROL_SELECTOR));
+    return controls.find((control) => isActionControl(control)) ?? null;
+}
+
+function findDiscussionHeader(): HTMLElement | null {
+    return (
+        document.querySelector<HTMLElement>('#partial-discussion-header') ??
+        document.querySelector<HTMLElement>('[data-component="PH_Title"]')?.closest<HTMLElement>('header') ??
+        document.querySelector<HTMLElement>('main header')
+    );
+}
+
+function findPageHeaderActionAnchor(): HTMLElement | null {
+    const actionRegions = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-component="PH_Actions"]'),
+    );
+    for (const region of actionRegions) {
+        const anchor = findFirstActionControl(region);
+        if (anchor) {
+            return anchor;
+        }
+    }
     return null;
 }
 
-function findNewIssueButton(): HTMLElement | null {
-    const headerButton =
-        document.querySelector<HTMLElement>(
-            '[class*="HeaderMenu-module__buttonContainer"] a[href*="/issues/new"]',
-        ) ??
-        document.querySelector<HTMLElement>(
-            '#partial-discussion-header a[href*="/issues/new"], .gh-header a[href*="/issues/new"]',
-        );
-    if (headerButton) {
-        return (
-            headerButton.closest<HTMLElement>('[class*="HeaderMenu-module__buttonContainer"]') ??
-            headerButton
-        );
+function findNewIssueButton(scope: ParentNode = document): HTMLElement | null {
+    const byLabel =
+        findControlByLabel(scope, /^new issue$/i) ?? findControlByLabel(scope, /\bnew issue\b/i);
+    if (byLabel) return byLabel;
+
+    const links = Array.from(scope.querySelectorAll<HTMLElement>('a[href*="/issues/new"]'));
+    return links.find((link) => isActionControl(link)) ?? null;
+}
+
+export function findIssueAnchorButton(): HTMLElement | null {
+    const pageHeaderAnchor = findPageHeaderActionAnchor();
+    if (pageHeaderAnchor) return pageHeaderAnchor;
+
+    const discussionHeader = findDiscussionHeader();
+    if (discussionHeader) {
+        const headerAnchor =
+            findControlByLabel(discussionHeader, /\bcopy\b/i) ??
+            findControlByLabel(discussionHeader, /\bedit issue title\b/i) ??
+            findNewIssueButton(discussionHeader) ??
+            findFirstActionControl(discussionHeader);
+        if (headerAnchor) return headerAnchor;
     }
 
-    const candidates = Array.from(
-        document.querySelectorAll<HTMLElement>('a[href*="/issues/new"], button'),
-    );
-    const candidate = candidates.find((item) => {
-        const text = item.textContent?.trim().toLowerCase();
-        return text === 'new issue';
-    });
-    if (!candidate) return null;
-    return (
-        candidate.closest<HTMLElement>('[class*="HeaderMenu-module__buttonContainer"]') ?? candidate
-    );
+    return findNewIssueButton();
 }
 
 export function findPrAnchorButton(): HTMLElement | null {
-  // --- New GitHub PR header (PageHeader) ---
-  const phActions = document.querySelector<HTMLElement>('[data-component="PH_Actions"]');
-  if (phActions) {
-    const copyBtn =
-      phActions.querySelector('button svg.octicon-copy')?.closest('button') ??
-      phActions.querySelector<HTMLElement>('button[aria-label*="Copy"]') ??
-      phActions.querySelector<HTMLElement>('button[aria-label*="copy"]');
-    if (copyBtn) return copyBtn as HTMLElement;
+    const pageHeaderAnchor = findPageHeaderActionAnchor();
+    if (pageHeaderAnchor) return pageHeaderAnchor;
 
-    const actionRow =
-      phActions.querySelector<HTMLElement>('div.d-flex.gap-2') ??
-      phActions.querySelector<HTMLElement>('[class*="menuActionsContainer"]');
-    const firstAction = actionRow?.querySelector<HTMLElement>('button, a, summary');
-    if (firstAction) return firstAction;
-  }
-
-  // --- Old layout fallbacks ---
-  const editButton =
-    document.querySelector<HTMLElement>('button[aria-label="Edit Pull Request title"]') ??
-    document.querySelector<HTMLElement>('button.js-title-edit-button');
-  if (editButton) return editButton;
-
-  const header =
-    document.querySelector('#partial-discussion-header') ??
-    document.querySelector('.gh-header');
-  if (header) {
-    const copyIcon = header.querySelector('button svg.octicon-copy');
-    if (copyIcon) return copyIcon.closest('button') as HTMLElement;
-
-    const actionsContainer = header.querySelector('.gh-header-actions');
-    if (actionsContainer?.firstElementChild) {
-      return actionsContainer.firstElementChild as HTMLElement;
+    const discussionHeader = findDiscussionHeader();
+    if (discussionHeader) {
+        const headerAnchor =
+            findControlByLabel(discussionHeader, /\bedit pull request title\b/i) ??
+            findControlByLabel(discussionHeader, /^edit$/i) ??
+            findControlByLabel(discussionHeader, /\bcopy\b/i) ??
+            findFirstActionControl(discussionHeader);
+        if (headerAnchor) return headerAnchor;
     }
-  }
 
-  const globalCopy = document.querySelector('button svg.octicon-copy');
-  if (globalCopy) return globalCopy.closest('button') as HTMLElement;
-
-  return null;
+    return findControlByLabel(document, /\bedit pull request title\b/i);
 }
 
 // ---------------------------------------------------------------------------
