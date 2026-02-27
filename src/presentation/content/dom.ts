@@ -2,7 +2,7 @@
  * Content Script – DOM helpers
  * Pure DOM creation / query functions, no application state.
  */
-import type { Marker, MarkerRange } from '@shared/github';
+import type { ActionsRunExportPreset, Marker, MarkerRange } from '@shared/github';
 import type { ExportOptions, ExportPreset } from '@domain/entities';
 import type { PullExportState } from './export-state';
 import contentStyles from './styles.css?raw';
@@ -128,7 +128,7 @@ export function updateCopyButtonLabel(
 // ---------------------------------------------------------------------------
 
 interface DropdownBaseOptions {
-    onResetMarkers: () => void;
+    onResetMarkers?: () => void;
 }
 
 export interface PullDropdownOptions extends DropdownBaseOptions {
@@ -144,11 +144,17 @@ export interface IssueDropdownOptions extends DropdownBaseOptions {
     onIssueTimelineModeChange: (checked: boolean) => void;
 }
 
-export type DropdownOptions = PullDropdownOptions | IssueDropdownOptions;
+export interface ActionsRunDropdownOptions extends DropdownBaseOptions {
+    kind: 'actions-run';
+    actionsRunPreset: ActionsRunExportPreset;
+    onActionsRunPresetChange: (preset: ActionsRunExportPreset) => ActionsRunExportPreset;
+}
+
+export type DropdownOptions = PullDropdownOptions | IssueDropdownOptions | ActionsRunDropdownOptions;
 
 export interface DropdownResult {
     dropdown: HTMLDivElement;
-    resetMarkersButton: HTMLButtonElement;
+    resetMarkersButton: HTMLButtonElement | null;
 }
 
 interface DropdownToggleControl {
@@ -162,6 +168,13 @@ const pullPresetLabels: Array<{ value: ExportPreset; label: string }> = [
     { value: 'review-comments-only', label: 'Review comments only' },
     { value: 'commit-log', label: 'Commit log' },
     { value: 'custom', label: 'Custom' },
+];
+
+const actionsRunPresetLabels: Array<{ value: ActionsRunExportPreset; label: string }> = [
+    { value: 'only-summary', label: 'Only Summary' },
+    { value: 'export-all', label: 'Export All' },
+    { value: 'failure-job', label: 'Export Only Failure Job (Entire)' },
+    { value: 'failure-step', label: "Export Only Failure Job's Failure Step" },
 ];
 
 const pullOptionGroups: Array<{
@@ -335,7 +348,7 @@ export function createSettingsDropdown(opts: DropdownOptions): DropdownResult {
 
         syncPullControls(opts.pullState);
         dropdown.appendChild(advancedDetails);
-    } else {
+    } else if (opts.kind === 'issue') {
         const presetRow = document.createElement('div');
         presetRow.className = 'context-tools-dropdown-item context-tools-dropdown-static-row';
 
@@ -370,23 +383,56 @@ export function createSettingsDropdown(opts: DropdownOptions): DropdownResult {
         groupEl.append(groupTitle, timelineControl.row);
         advancedContent.appendChild(groupEl);
         dropdown.appendChild(advancedDetails);
+    } else {
+        const presetRow = document.createElement('label');
+        presetRow.className = 'context-tools-dropdown-item context-tools-dropdown-select-row';
+
+        const presetLabel = document.createElement('span');
+        presetLabel.textContent = 'Preset';
+
+        const presetSelect = document.createElement('select');
+        presetSelect.className = 'context-tools-dropdown-select';
+
+        actionsRunPresetLabels.forEach((preset) => {
+            const option = document.createElement('option');
+            option.value = preset.value;
+            option.textContent = preset.label;
+            presetSelect.appendChild(option);
+        });
+
+        const syncActionsRunControls = (preset: ActionsRunExportPreset): void => {
+            presetSelect.value = preset;
+        };
+
+        presetSelect.addEventListener('change', () => {
+            const nextPreset = opts.onActionsRunPresetChange(presetSelect.value as ActionsRunExportPreset);
+            syncActionsRunControls(nextPreset);
+        });
+
+        syncActionsRunControls(opts.actionsRunPreset);
+        presetRow.append(presetLabel, presetSelect);
+        dropdown.appendChild(presetRow);
     }
 
-    const divider = document.createElement('div');
-    divider.className = 'context-tools-dropdown-divider';
-    dropdown.appendChild(divider);
+    let resetMarkersButton: HTMLButtonElement | null = null;
+    if (opts.onResetMarkers) {
+        const divider = document.createElement('div');
+        divider.className = 'context-tools-dropdown-divider';
+        dropdown.appendChild(divider);
 
-    const resetItem = document.createElement('button');
-    resetItem.type = 'button';
-    resetItem.className = 'context-tools-dropdown-item context-tools-dropdown-action';
-    resetItem.textContent = 'Reset markers';
-    resetItem.addEventListener('click', () => {
-        opts.onResetMarkers();
-        dropdown.hidden = true;
-    });
-    dropdown.appendChild(resetItem);
+        const resetItem = document.createElement('button');
+        resetItem.type = 'button';
+        resetItem.className = 'context-tools-dropdown-item context-tools-dropdown-action';
+        resetItem.textContent = 'Reset markers';
+        resetItem.addEventListener('click', () => {
+            opts.onResetMarkers?.();
+            dropdown.hidden = true;
+        });
+        dropdown.appendChild(resetItem);
+        resetMarkersButton = resetItem;
+    }
 
-    return { dropdown, resetMarkersButton: resetItem };
+    return { dropdown, resetMarkersButton };
 }
 
 // ---------------------------------------------------------------------------
@@ -397,7 +443,21 @@ export interface CopyButtonGroupResult {
     group: HTMLDivElement;
     copyButton: HTMLButtonElement;
     settingsDropdown: HTMLDivElement;
-    resetMarkersButton: HTMLButtonElement;
+    resetMarkersButton: HTMLButtonElement | null;
+}
+
+export function createCopyButton(onCopyClick: () => void): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'context-tools-copy-button';
+    button.dataset.contextTools = 'copy-button';
+    button.setAttribute('aria-label', 'Copy as Markdown');
+    button.innerHTML = `
+    <span class="context-tools-label">Copy as Markdown</span>
+    <span class="context-tools-range-indicator" hidden></span>
+  `;
+    button.addEventListener('click', onCopyClick);
+    return button;
 }
 
 export function createCopyButtonGroup(
@@ -409,16 +469,7 @@ export function createCopyButtonGroup(
     group.dataset.contextTools = 'button-group';
     group.style.position = 'relative';
 
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'context-tools-copy-button';
-    button.dataset.contextTools = 'copy-button';
-    button.setAttribute('aria-label', 'Copy as Markdown');
-    button.innerHTML = `
-    <span class="context-tools-label">Copy as Markdown</span>
-    <span class="context-tools-range-indicator" hidden></span>
-  `;
-    button.addEventListener('click', onCopyClick);
+    const button = createCopyButton(onCopyClick);
     group.appendChild(button);
 
     const trigger = document.createElement('button');
@@ -555,6 +606,75 @@ export function findPrAnchorButton(): HTMLElement | null {
     }
 
     return findControlByLabel(document, /\bedit pull request title\b/i);
+}
+
+function findRerunActionMenuContainer(scopes: HTMLElement[], pattern: RegExp): HTMLElement | null {
+    for (const scope of scopes) {
+        const rerunTrigger = findControlByLabel(scope, pattern);
+        if (!rerunTrigger) {
+            continue;
+        }
+
+        const actionMenu = rerunTrigger.closest('action-menu');
+        if (actionMenu?.parentElement) {
+            return actionMenu.parentElement;
+        }
+    }
+
+    return null;
+}
+
+function findScopeChildContainer(scope: HTMLElement, node: HTMLElement): HTMLElement | null {
+    let current: HTMLElement | null = node;
+    while (current && current.parentElement && current.parentElement !== scope) {
+        current = current.parentElement;
+    }
+    return current?.parentElement === scope ? current : null;
+}
+
+function findFirstActionAnchorContainer(scopes: HTMLElement[]): HTMLElement | null {
+    for (const scope of scopes) {
+        const firstActionControl = findFirstActionControl(scope);
+        if (!firstActionControl) {
+            continue;
+        }
+
+        const actionMenu = firstActionControl.closest('action-menu');
+        if (actionMenu?.parentElement) {
+            return findScopeChildContainer(scope, actionMenu.parentElement) ?? actionMenu.parentElement;
+        }
+
+        return (
+            findScopeChildContainer(scope, firstActionControl) ??
+            firstActionControl.parentElement
+        );
+    }
+
+    return null;
+}
+
+export function findActionsRunAnchorContainer(): HTMLElement | null {
+    const rerunPattern = /^re-?run jobs?$/i;
+    const actionRegions = Array.from(
+        document.querySelectorAll<HTMLElement>('.PageHeader-actions, [data-component="PH_Actions"]'),
+    );
+    const actionRegionContainer = findRerunActionMenuContainer(actionRegions, rerunPattern);
+    if (actionRegionContainer) {
+        return actionRegionContainer;
+    }
+
+    const actionRegionFallbackContainer = findFirstActionAnchorContainer(actionRegions);
+    if (actionRegionFallbackContainer) {
+        return actionRegionFallbackContainer;
+    }
+
+    const fallbackHeaders = Array.from(
+        document.querySelectorAll<HTMLElement>('main header, page-header, .PageHeader'),
+    );
+    return (
+        findRerunActionMenuContainer(fallbackHeaders, rerunPattern) ??
+        findFirstActionAnchorContainer(fallbackHeaders)
+    );
 }
 
 // ---------------------------------------------------------------------------

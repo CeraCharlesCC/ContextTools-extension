@@ -1,4 +1,6 @@
 import type {
+  GitHubActionsJob,
+  GitHubActionsRun,
   GitHubCommit,
   GitHubIssue,
   GitHubIssueComment,
@@ -9,6 +11,7 @@ import type {
 } from './types';
 
 const API_ROOT = 'https://api.github.com';
+const API_ROOT_ORIGIN = new URL(API_ROOT).origin;
 
 function buildHeaders(token?: string): HeadersInit {
   const headers: Record<string, string> = {
@@ -38,13 +41,48 @@ async function fetchJson<T>(url: string, token?: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function fetchText(url: string, token?: string): Promise<string> {
+  const response = await fetch(url, {
+    headers: buildHeaders(token),
+    redirect: 'follow',
+  });
+  if (!response.ok) {
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const errorData = (await response.json()) as { message?: string };
+      if (errorData?.message) {
+        message = `${message} - ${errorData.message}`;
+      }
+    } catch {
+      // ignore JSON parsing errors
+    }
+    throw new Error(`GitHub API error: ${message}`);
+  }
+  return response.text();
+}
+
 function nextLink(linkHeader: string | null): string | null {
   if (!linkHeader) return null;
   const parts = linkHeader.split(',');
   for (const part of parts) {
     const [urlPart, relPart] = part.split(';').map((section) => section.trim());
     if (relPart === 'rel="next"') {
-      return urlPart.slice(1, -1);
+      const candidateUrl = urlPart.startsWith('<') && urlPart.endsWith('>')
+        ? urlPart.slice(1, -1)
+        : urlPart;
+
+      let parsed: URL;
+      try {
+        parsed = new URL(candidateUrl, API_ROOT);
+      } catch {
+        throw new Error('GitHub API error: Invalid pagination URL in Link header.');
+      }
+
+      if (parsed.origin !== API_ROOT_ORIGIN || parsed.username || parsed.password) {
+        throw new Error(`GitHub API error: Refusing pagination URL outside trusted origin (${API_ROOT_ORIGIN}).`);
+      }
+
+      return parsed.toString();
     }
   }
   return null;
@@ -72,6 +110,43 @@ async function fetchAllPages<T>(url: string, token?: string): Promise<T[]> {
     const data = (await response.json()) as T[];
     if (Array.isArray(data)) {
       results = results.concat(data);
+    }
+
+    const linkHeader = response.headers.get('link');
+    nextUrl = nextLink(linkHeader);
+  }
+
+  return results;
+}
+
+async function fetchAllPagesExtract<T>(params: {
+  url: string;
+  token?: string;
+  extract: (json: unknown) => T[];
+}): Promise<T[]> {
+  const { url, token, extract } = params;
+  let results: T[] = [];
+  let nextUrl: string | null = url;
+
+  while (nextUrl) {
+    const response = await fetch(nextUrl, { headers: buildHeaders(token) });
+    if (!response.ok) {
+      let message = `${response.status} ${response.statusText}`;
+      try {
+        const errorData = (await response.json()) as { message?: string };
+        if (errorData?.message) {
+          message = `${message} - ${errorData.message}`;
+        }
+      } catch {
+        // ignore JSON parsing errors
+      }
+      throw new Error(`GitHub API error: ${message}`);
+    }
+
+    const json = (await response.json()) as unknown;
+    const extracted = extract(json);
+    if (Array.isArray(extracted)) {
+      results = results.concat(extracted);
     }
 
     const linkHeader = response.headers.get('link');
@@ -379,6 +454,47 @@ export async function getPullReviewComments(params: {
   const { owner, repo, number, token } = params;
   const url = `${API_ROOT}/repos/${owner}/${repo}/pulls/${number}/comments?per_page=100`;
   return fetchAllPages<GitHubPullReviewComment>(url, token);
+}
+
+export async function getActionsRun(params: {
+  owner: string;
+  repo: string;
+  runId: number;
+  token?: string;
+}): Promise<GitHubActionsRun> {
+  const { owner, repo, runId, token } = params;
+  const url = `${API_ROOT}/repos/${owner}/${repo}/actions/runs/${runId}`;
+  return fetchJson<GitHubActionsRun>(url, token);
+}
+
+export async function getActionsRunJobs(params: {
+  owner: string;
+  repo: string;
+  runId: number;
+  token?: string;
+}): Promise<GitHubActionsJob[]> {
+  const { owner, repo, runId, token } = params;
+  const url = `${API_ROOT}/repos/${owner}/${repo}/actions/runs/${runId}/jobs?per_page=100`;
+
+  return fetchAllPagesExtract<GitHubActionsJob>({
+    url,
+    token,
+    extract: (json) => {
+      const record = json as { jobs?: GitHubActionsJob[] } | null;
+      return Array.isArray(record?.jobs) ? record.jobs : [];
+    },
+  });
+}
+
+export async function getActionsJobLogs(params: {
+  owner: string;
+  repo: string;
+  jobId: number;
+  token?: string;
+}): Promise<string> {
+  const { owner, repo, jobId, token } = params;
+  const url = `${API_ROOT}/repos/${owner}/${repo}/actions/jobs/${jobId}/logs`;
+  return fetchText(url, token);
 }
 
 export async function getPullReviewThreadResolution(params: {

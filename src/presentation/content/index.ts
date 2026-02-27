@@ -3,8 +3,15 @@
  * Runs in the context of web pages
  */
 import { getBrowserAdapters } from '@infrastructure/adapters';
-import { copyToClipboard, findMarkerInElement, parsePageRef } from '@shared/github';
+import {
+  copyToClipboard,
+  findMarkerInElement,
+  parsePageRef,
+  resolveActionsRunExportOptions,
+} from '@shared/github';
 import type {
+  ActionsRunExportOptions,
+  ActionsRunExportPreset,
   GenerateMarkdownPayload,
   GenerateMarkdownResult,
   Marker,
@@ -23,6 +30,7 @@ import {
   updateMarkerHighlights,
   updateCopyButtonLabel,
   createCopyButtonGroup,
+  findActionsRunAnchorContainer,
   findIssueAnchorButton,
   findPrAnchorButton,
   closeMenu,
@@ -58,6 +66,7 @@ let issueEnabled = true;
 
 let tempPullState: PullExportState | null = null;
 let tempIssueTimelineMode: boolean | null = null;
+let tempActionsRunState: ActionsRunExportState | null = null;
 let lastPullState: PullExportState | null = null;
 let lastIssueTimelineMode: boolean | null = null;
 
@@ -70,6 +79,11 @@ type IssueExportDefaults = {
   timelineMode: boolean;
 };
 
+interface ActionsRunExportState {
+  preset: ActionsRunExportPreset;
+  options: ActionsRunExportOptions;
+}
+
 let defaultPrSettings: PrExportDefaults = {
   defaultPreset: 'full-conversation',
   customOptions: createDefaultCustomOptions(),
@@ -78,6 +92,10 @@ let defaultPrSettings: PrExportDefaults = {
 let defaultIssueSettings: IssueExportDefaults = {
   timelineMode: true,
 };
+
+const defaultActionsRunState: ActionsRunExportState = resolveActionsRunExportOptions({
+  preset: 'export-all',
+});
 
 type LastExportStateKind = 'pull' | 'issue';
 
@@ -111,6 +129,10 @@ let pageObserver: MutationObserver | null = null;
 let menuObserver: MutationObserver | null = null;
 let pendingInjectFrame: number | null = null;
 let copyButtonInjected = false;
+
+function isMarkerPage(page: PageRef | null): page is Extract<PageRef, { kind: 'issue' | 'pull' }> {
+  return page?.kind === 'issue' || page?.kind === 'pull';
+}
 
 // Message handler for content script
 adapters.messaging.addListener(async (message: { type: string; payload?: unknown }) => {
@@ -239,6 +261,13 @@ function resolveCurrentIssueTimelineMode(): boolean {
   return defaultIssueSettings.timelineMode;
 }
 
+function resolveCurrentActionsRunState(): ActionsRunExportState {
+  if (tempActionsRunState) {
+    return tempActionsRunState;
+  }
+  return defaultActionsRunState;
+}
+
 async function getLastExportState(kind: LastExportStateKind): Promise<unknown> {
   return adapters.messaging.sendMessage<
     {
@@ -307,6 +336,7 @@ async function persistIssueLastExportState(timelineMode: boolean): Promise<void>
 
 function resolveCurrentPageEnabled(): boolean {
   if (!currentPage) return false;
+  if (currentPage.kind === 'actions-run') return true;
   return currentPage.kind === 'pull' ? prEnabled : issueEnabled;
 }
 
@@ -320,8 +350,11 @@ async function handleCopyClick(): Promise<void> {
 
   const payload: GenerateMarkdownPayload = {
     page: currentPage,
-    range: markerRange,
   };
+
+  if (isMarkerPage(currentPage)) {
+    payload.range = markerRange;
+  }
 
   let copiedPullState: PullExportState | null = null;
   let copiedIssueTimelineMode: boolean | null = null;
@@ -330,11 +363,15 @@ async function handleCopyClick(): Promise<void> {
     copiedPullState = resolveCurrentPullState();
     payload.preset = copiedPullState.preset;
     payload.customOptions = cloneOptions(copiedPullState.customOptions);
-  } else {
+  } else if (currentPage.kind === 'issue') {
     copiedIssueTimelineMode = resolveCurrentIssueTimelineMode();
     payload.customOptions = {
       timelineMode: copiedIssueTimelineMode,
     };
+  } else if (currentPage.kind === 'actions-run') {
+    const actionsState = resolveCurrentActionsRunState();
+    payload.actionsPreset = actionsState.preset;
+    payload.actionsOptions = { ...actionsState.options };
   }
 
   try {
@@ -406,6 +443,19 @@ function buildDropdownOptions(): DropdownOptions {
     };
   }
 
+  if (currentPage?.kind === 'actions-run') {
+    const currentState = resolveCurrentActionsRunState();
+    return {
+      kind: 'actions-run',
+      actionsRunPreset: currentState.preset,
+      onActionsRunPresetChange: (preset) => {
+        const nextState = resolveActionsRunExportOptions({ preset });
+        tempActionsRunState = nextState;
+        return nextState.preset;
+      },
+    };
+  }
+
   return {
     kind: 'issue',
     timelineMode: resolveCurrentIssueTimelineMode(),
@@ -422,7 +472,7 @@ function resolveMarkerForMenu(menu: Element): Marker | null {
 }
 
 function injectMenuItems(menu: Element): void {
-  if (!currentPage) return;
+  if (!isMarkerPage(currentPage)) return;
   if (menu.querySelector(MENU_ITEM_SELECTOR)) return;
   if (!isCommentMenu(menu)) return;
 
@@ -489,7 +539,7 @@ function handleMenuMutation(mutation: MutationRecord): void {
 function observeMenus(): void {
   menuObserver = new MutationObserver((mutations) => {
     // Gate early: skip all work when not on an issue/PR page
-    if (!currentPage) return;
+    if (!isMarkerPage(currentPage)) return;
 
     mutations.forEach((mutation) => {
       if (mutation.type === 'childList') {
@@ -502,8 +552,21 @@ function observeMenus(): void {
 
 function observePageUpdates(): void {
   pageObserver = new MutationObserver(() => {
-    // Skip if not on an issue/PR page or already injected
-    if (!currentPage || copyButtonInjected) return;
+    if (!currentPage) return;
+
+    if (currentPage.kind === 'actions-run') {
+      const existing = document.querySelector(COPY_BUTTON_SELECTOR);
+      if (existing) {
+        copyButtonInjected = true;
+        copyButton = existing as HTMLButtonElement;
+        return;
+      }
+
+      copyButtonInjected = false;
+      copyButton = null;
+    } else if (copyButtonInjected) {
+      return;
+    }
 
     // Debounce: coalesce rapid mutations into one frame
     if (pendingInjectFrame !== null) return;
@@ -516,7 +579,7 @@ function observePageUpdates(): void {
 }
 
 function tryInjectCopyButton(): void {
-  if (!currentPage || copyButtonInjected) return;
+  if (!currentPage || (copyButtonInjected && currentPage.kind !== 'actions-run')) return;
 
   // Check if already present
   const existing = document.querySelector(COPY_BUTTON_SELECTOR);
@@ -524,9 +587,22 @@ function tryInjectCopyButton(): void {
     copyButton = existing as HTMLButtonElement;
     copyButtonInjected = true;
     updateCopyButtonState();
-    disconnectPageObserver();
+    if (currentPage.kind !== 'actions-run') {
+      disconnectPageObserver();
+    }
     return;
   }
+
+  if (currentPage.kind === 'actions-run') {
+    tryInjectActionsRunCopyButton();
+    return;
+  }
+
+  tryInjectMarkerPageCopyGroup();
+}
+
+function tryInjectMarkerPageCopyGroup(): void {
+  if (!isMarkerPage(currentPage) || copyButtonInjected) return;
 
   const anchor = currentPage.kind === 'pull' ? findPrAnchorButton() : findIssueAnchorButton();
   if (!anchor || !anchor.parentElement) return;
@@ -543,6 +619,23 @@ function tryInjectCopyButton(): void {
   disconnectPageObserver();
 }
 
+function tryInjectActionsRunCopyButton(): void {
+  if (currentPage?.kind !== 'actions-run') return;
+
+  const anchorContainer = findActionsRunAnchorContainer();
+  if (!anchorContainer?.parentElement) return;
+
+  const result = createCopyButtonGroup(buildDropdownOptions(), () => {
+    void handleCopyClick();
+  });
+
+  copyButton = result.copyButton;
+  resetMarkersButton = result.resetMarkersButton;
+  anchorContainer.parentElement.insertBefore(result.group, anchorContainer);
+  copyButtonInjected = true;
+  updateCopyButtonState();
+}
+
 function disconnectPageObserver(): void {
   if (pageObserver) {
     pageObserver.disconnect();
@@ -556,6 +649,8 @@ function disconnectPageObserver(): void {
 
 function trackMenuClicks(): void {
   const updateCandidate = (event: Event): void => {
+    if (!isMarkerPage(currentPage)) return;
+
     const target = event.target as Element | null;
     if (!target) return;
     const trigger = target.closest('button, summary');
@@ -599,7 +694,7 @@ function handlePageChange(): void {
 
   // Try immediate injection, then observe if not yet present
   tryInjectCopyButton();
-  if (!copyButtonInjected) {
+  if (currentPage.kind === 'actions-run' || !copyButtonInjected) {
     observePageUpdates();
   }
 }

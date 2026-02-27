@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Context Tools Extension",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Copy GitHub context into markdown.",
   "browser_specific_settings": {
     "gecko": {

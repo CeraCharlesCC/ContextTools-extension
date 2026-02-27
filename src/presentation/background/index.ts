@@ -7,7 +7,15 @@ import { SettingsRepository } from '@infrastructure/repositories';
 import { GetSettingsUseCase, UpdateSettingsUseCase } from '@application/usecases';
 import type { SettingsUpdate } from '@domain/entities';
 import {
+  attachActionsJobStepLogs,
+  actionsRunToMarkdown,
   buildTimelineEvents,
+  getActionsJobLogs,
+  isFailureConclusion,
+  readActionsRunPreset,
+  resolveActionsRunExportOptions,
+  getActionsRun,
+  getActionsRunJobs,
   getIssue,
   getIssueComments,
   getCommit,
@@ -92,10 +100,17 @@ async function getLastExportState(kind: PageKind): Promise<PullLastExportState |
   if (kind === 'pull') {
     return current.pull ?? null;
   }
-  return current.issue ?? null;
+  if (kind === 'issue') {
+    return current.issue ?? null;
+  }
+  return null;
 }
 
 async function setLastExportState(kind: PageKind, state: unknown): Promise<void> {
+  if (kind === 'actions-run') {
+    return;
+  }
+
   const current = await readLastExportState();
 
   if (kind === 'pull') {
@@ -268,7 +283,78 @@ function filterResolvedReviewComments(reviewComments: GitHubPullReviewComment[],
 
 async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<GenerateMarkdownResult> {
   const token = await getGitHubToken();
-  const { owner, repo, number } = payload.page;
+  const { owner, repo } = payload.page;
+
+  if (payload.page.kind === 'actions-run') {
+    const runId = payload.page.runId;
+    const actionsRunExportState = resolveActionsRunExportOptions({
+      preset: readActionsRunPreset(payload.actionsPreset),
+      options: payload.actionsOptions,
+    });
+    const [run, jobs] = await Promise.all([
+      getActionsRun({ owner, repo, runId, token }),
+      actionsRunExportState.options.includeJobs
+        ? getActionsRunJobs({ owner, repo, runId, token })
+        : Promise.resolve([]),
+    ]);
+
+    let actionsWarning: string | undefined;
+    let jobsWithLogs = jobs;
+
+    if (actionsRunExportState.options.includeSteps && jobs.length) {
+      const jobsTarget = actionsRunExportState.options.onlyFailureJobs
+        ? jobs.filter((job) => isFailureConclusion(job.conclusion))
+        : jobs;
+
+      const logResults = await Promise.all(
+        jobsTarget.map(async (job) => {
+          try {
+            const rawLog = await getActionsJobLogs({ owner, repo, jobId: job.id, token });
+            return {
+              jobId: job.id,
+              rawLog,
+            };
+          } catch (error) {
+            console.warn('Failed to load Actions job log:', job.id, error);
+            return null;
+          }
+        }),
+      );
+
+      const logByJobId = new Map<number, string>();
+      let failedFetchCount = 0;
+      logResults.forEach((result) => {
+        if (!result) {
+          failedFetchCount += 1;
+          return;
+        }
+        logByJobId.set(result.jobId, result.rawLog);
+      });
+
+      jobsWithLogs = jobs.map((job) => {
+        const rawLog = logByJobId.get(job.id);
+        if (!rawLog) return job;
+        return attachActionsJobStepLogs(job, rawLog);
+      });
+
+      if (failedFetchCount > 0) {
+        actionsWarning =
+          `${failedFetchCount} job log(s) could not be downloaded, so some step logs may be missing.`;
+      }
+    }
+
+    return {
+      ok: true,
+      markdown: actionsRunToMarkdown({
+        run,
+        jobs: jobsWithLogs,
+        options: actionsRunExportState.options,
+      }),
+      warning: actionsWarning,
+    };
+  }
+
+  const number = payload.page.number;
 
   const settings = await getSettingsUseCase.execute();
   const runtimeState = await readLastExportState();
