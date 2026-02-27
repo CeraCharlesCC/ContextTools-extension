@@ -624,6 +624,35 @@ function findRerunActionMenuContainer(scopes: HTMLElement[], pattern: RegExp): H
     return null;
 }
 
+function findScopeChildContainer(scope: HTMLElement, node: HTMLElement): HTMLElement | null {
+    let current: HTMLElement | null = node;
+    while (current && current.parentElement && current.parentElement !== scope) {
+        current = current.parentElement;
+    }
+    return current?.parentElement === scope ? current : null;
+}
+
+function findFirstActionAnchorContainer(scopes: HTMLElement[]): HTMLElement | null {
+    for (const scope of scopes) {
+        const firstActionControl = findFirstActionControl(scope);
+        if (!firstActionControl) {
+            continue;
+        }
+
+        const actionMenu = firstActionControl.closest('action-menu');
+        if (actionMenu?.parentElement) {
+            return findScopeChildContainer(scope, actionMenu.parentElement) ?? actionMenu.parentElement;
+        }
+
+        return (
+            findScopeChildContainer(scope, firstActionControl) ??
+            firstActionControl.parentElement
+        );
+    }
+
+    return null;
+}
+
 export function findActionsRunAnchorContainer(): HTMLElement | null {
     const rerunPattern = /^re-?run jobs?$/i;
     const actionRegions = Array.from(
@@ -634,10 +663,18 @@ export function findActionsRunAnchorContainer(): HTMLElement | null {
         return actionRegionContainer;
     }
 
+    const actionRegionFallbackContainer = findFirstActionAnchorContainer(actionRegions);
+    if (actionRegionFallbackContainer) {
+        return actionRegionFallbackContainer;
+    }
+
     const fallbackHeaders = Array.from(
         document.querySelectorAll<HTMLElement>('main header, page-header, .PageHeader'),
     );
-    return findRerunActionMenuContainer(fallbackHeaders, rerunPattern);
+    return (
+        findRerunActionMenuContainer(fallbackHeaders, rerunPattern) ??
+        findFirstActionAnchorContainer(fallbackHeaders)
+    );
 }
 
 // ---------------------------------------------------------------------------
