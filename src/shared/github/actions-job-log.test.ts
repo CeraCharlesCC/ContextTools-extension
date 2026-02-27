@@ -43,4 +43,33 @@ describe('attachActionsJobStepLogs', () => {
     expect(steps[1].log).toContain('go: downloading modernc.org/sqlite v1.46.1');
     expect(steps[1].log).toContain('--- FAIL: TestResolveStateDir_DefaultMatchesPlatformParityLayout (0.00s)');
   });
+
+  it('does not map ambiguous group names to a step', () => {
+    const job: GitHubActionsJob = {
+      id: 7,
+      name: 'integration',
+      steps: [
+        {
+          number: 1,
+          name: 'integration test',
+        },
+        {
+          number: 2,
+          name: 'integration lint',
+        },
+      ],
+    };
+
+    const rawLog = [
+      '##[group]integration',
+      'running integration checks',
+      '##[endgroup]',
+    ].join('\n');
+
+    const result = attachActionsJobStepLogs(job, rawLog);
+    const steps = result.steps ?? [];
+
+    expect(steps[0].log).toBeNull();
+    expect(steps[1].log).toBeNull();
+  });
 });

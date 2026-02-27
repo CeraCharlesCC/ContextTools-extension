@@ -608,29 +608,9 @@ export function findPrAnchorButton(): HTMLElement | null {
     return findControlByLabel(document, /\bedit pull request title\b/i);
 }
 
-export function findActionsRunAnchorContainer(): HTMLElement | null {
-    const rerunPattern = /^re-?run jobs?$/i;
-    const actionRegions = Array.from(
-        document.querySelectorAll<HTMLElement>('.PageHeader-actions, [data-component="PH_Actions"]'),
-    );
-
-    for (const region of actionRegions) {
-        const rerunTrigger = findControlByLabel(region, rerunPattern);
-        if (!rerunTrigger) {
-            continue;
-        }
-
-        const actionMenu = rerunTrigger.closest('action-menu');
-        if (actionMenu?.parentElement) {
-            return actionMenu.parentElement;
-        }
-    }
-
-    const fallbackHeaders = Array.from(
-        document.querySelectorAll<HTMLElement>('main header, page-header, .PageHeader'),
-    );
-    for (const header of fallbackHeaders) {
-        const rerunTrigger = findControlByLabel(header, rerunPattern);
+function findRerunActionMenuContainer(scopes: HTMLElement[], pattern: RegExp): HTMLElement | null {
+    for (const scope of scopes) {
+        const rerunTrigger = findControlByLabel(scope, pattern);
         if (!rerunTrigger) {
             continue;
         }
@@ -642,6 +622,22 @@ export function findActionsRunAnchorContainer(): HTMLElement | null {
     }
 
     return null;
+}
+
+export function findActionsRunAnchorContainer(): HTMLElement | null {
+    const rerunPattern = /^re-?run jobs?$/i;
+    const actionRegions = Array.from(
+        document.querySelectorAll<HTMLElement>('.PageHeader-actions, [data-component="PH_Actions"]'),
+    );
+    const actionRegionContainer = findRerunActionMenuContainer(actionRegions, rerunPattern);
+    if (actionRegionContainer) {
+        return actionRegionContainer;
+    }
+
+    const fallbackHeaders = Array.from(
+        document.querySelectorAll<HTMLElement>('main header, page-header, .PageHeader'),
+    );
+    return findRerunActionMenuContainer(fallbackHeaders, rerunPattern);
 }
 
 // ---------------------------------------------------------------------------

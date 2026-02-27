@@ -106,14 +106,20 @@ function findStepByGroupName(windows: StepWindow[], groupName: string): number {
   const normalizedGroup = normalizeStepName(groupName);
   if (!normalizedGroup) return -1;
 
-  const exactMatch = windows.findIndex((window) => normalizeStepName(window.step.name) === normalizedGroup);
-  if (exactMatch !== -1) return exactMatch;
+  const exactMatches = windows
+    .map((window, index) => (normalizeStepName(window.step.name) === normalizedGroup ? index : -1))
+    .filter((index) => index !== -1);
+  if (exactMatches.length === 1) return exactMatches[0];
+  if (exactMatches.length > 1) return -1;
 
-  return windows.findIndex((window) => {
-    const stepName = normalizeStepName(window.step.name);
-    if (!stepName) return false;
-    return normalizedGroup.includes(stepName) || stepName.includes(normalizedGroup);
-  });
+  const fuzzyMatches = windows
+    .map((window, index) => {
+      const stepName = normalizeStepName(window.step.name);
+      if (!stepName) return -1;
+      return normalizedGroup.includes(stepName) || stepName.includes(normalizedGroup) ? index : -1;
+    })
+    .filter((index) => index !== -1);
+  return fuzzyMatches.length === 1 ? fuzzyMatches[0] : -1;
 }
 
 function trimLog(value: string): string | null {

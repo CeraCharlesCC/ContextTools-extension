@@ -11,6 +11,7 @@ import type {
 } from './types';
 
 const API_ROOT = 'https://api.github.com';
+const API_ROOT_ORIGIN = new URL(API_ROOT).origin;
 
 function buildHeaders(token?: string): HeadersInit {
   const headers: Record<string, string> = {
@@ -66,7 +67,22 @@ function nextLink(linkHeader: string | null): string | null {
   for (const part of parts) {
     const [urlPart, relPart] = part.split(';').map((section) => section.trim());
     if (relPart === 'rel="next"') {
-      return urlPart.slice(1, -1);
+      const candidateUrl = urlPart.startsWith('<') && urlPart.endsWith('>')
+        ? urlPart.slice(1, -1)
+        : urlPart;
+
+      let parsed: URL;
+      try {
+        parsed = new URL(candidateUrl, API_ROOT);
+      } catch {
+        throw new Error('GitHub API error: Invalid pagination URL in Link header.');
+      }
+
+      if (parsed.origin !== API_ROOT_ORIGIN || parsed.username || parsed.password) {
+        throw new Error(`GitHub API error: Refusing pagination URL outside trusted origin (${API_ROOT_ORIGIN}).`);
+      }
+
+      return parsed.toString();
     }
   }
   return null;

@@ -1,5 +1,6 @@
 import { formatDate, formatUser } from '../format';
 import type { ActionsRunExportOptions, GitHubActionsJob, GitHubActionsRun } from '../types';
+import { isFailureConclusion } from '../actions';
 import { createDefaultActionsRunExportOptions } from './actions-run-export';
 
 function renderRunStatus(run: GitHubActionsRun): string {
@@ -36,8 +37,8 @@ function renderRunner(job: GitHubActionsJob): string {
   return 'Unknown';
 }
 
-function isFailureConclusion(conclusion: string | null | undefined): boolean {
-  return (conclusion ?? '').toLowerCase() === 'failure';
+function escapeCodeFenceContent(value: string): string {
+  return value.replace(/```/g, '\\`\\`\\`');
 }
 
 function filterJobs(jobs: GitHubActionsJob[], options: ActionsRunExportOptions): GitHubActionsJob[] {
@@ -129,7 +130,7 @@ export function actionsRunToMarkdown(input: {
         lines.push(`- ${stepNumber}. ${stepName} - ${status}/${conclusion}`);
         if (step.log?.trim()) {
           lines.push('```text');
-          lines.push(step.log);
+          lines.push(escapeCodeFenceContent(step.log));
           lines.push('```');
         } else {
           lines.push('_No step log available._');

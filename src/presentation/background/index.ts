@@ -11,6 +11,7 @@ import {
   actionsRunToMarkdown,
   buildTimelineEvents,
   getActionsJobLogs,
+  isFailureConclusion,
   readActionsRunPreset,
   resolveActionsRunExportOptions,
   getActionsRun,
@@ -248,10 +249,6 @@ function combineWarnings(...warnings: Array<string | undefined>): string | undef
   const filtered = warnings.map((warning) => warning?.trim()).filter((warning): warning is string => Boolean(warning));
   if (!filtered.length) return undefined;
   return filtered.join(' ');
-}
-
-function isFailureConclusion(conclusion: string | null | undefined): boolean {
-  return (conclusion ?? '').toLowerCase() === 'failure';
 }
 
 function filterResolvedReviewComments(reviewComments: GitHubPullReviewComment[], commentResolution: Map<number, boolean> | null): {

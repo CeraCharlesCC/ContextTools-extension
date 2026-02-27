@@ -164,4 +164,33 @@ describe('actionsRunToMarkdown', () => {
     expect(markdown).toContain('Run go test ./...');
     expect(markdown).toContain('--- FAIL: TestSomething');
   });
+
+  it('escapes code-fence markers inside step logs', () => {
+    const options = resolveActionsRunExportOptions({ preset: 'export-all' }).options;
+    const markdown = actionsRunToMarkdown({
+      run: baseRun,
+      jobs: [
+        {
+          id: 1,
+          name: 'test',
+          status: 'completed',
+          conclusion: 'failure',
+          steps: [
+            {
+              number: 1,
+              name: 'Render',
+              status: 'completed',
+              conclusion: 'failure',
+              log: 'before\n```\n<script>alert("xss")</script>\nafter',
+            },
+          ],
+        },
+      ],
+      options,
+    });
+
+    expect(markdown).toContain('```text');
+    expect(markdown).toContain('\\`\\`\\`');
+    expect(markdown).not.toContain('before\n```\n<script>alert("xss")</script>\nafter');
+  });
 });
