@@ -135,4 +135,33 @@ describe('actionsRunToMarkdown', () => {
     expect(markdown).toContain('- 2. Run tests - completed/failure');
     expect(markdown).not.toContain('Setup - completed/success');
   });
+
+  it('renders step log body when available', () => {
+    const options = resolveActionsRunExportOptions({ preset: 'export-all' }).options;
+    const markdown = actionsRunToMarkdown({
+      run: baseRun,
+      jobs: [
+        {
+          id: 1,
+          name: 'test',
+          status: 'completed',
+          conclusion: 'failure',
+          steps: [
+            {
+              number: 2,
+              name: 'Test Module',
+              status: 'completed',
+              conclusion: 'failure',
+              log: 'Run go test ./...\n--- FAIL: TestSomething',
+            },
+          ],
+        },
+      ],
+      options,
+    });
+
+    expect(markdown).toContain('```text');
+    expect(markdown).toContain('Run go test ./...');
+    expect(markdown).toContain('--- FAIL: TestSomething');
+  });
 });

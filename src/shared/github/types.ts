@@ -190,6 +190,7 @@ export interface GitHubActionsJobStep {
   conclusion?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
+  log?: string | null;
 }
 
 export interface GitHubActionsJob {

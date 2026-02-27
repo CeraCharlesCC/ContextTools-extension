@@ -7,8 +7,10 @@ import { SettingsRepository } from '@infrastructure/repositories';
 import { GetSettingsUseCase, UpdateSettingsUseCase } from '@application/usecases';
 import type { SettingsUpdate } from '@domain/entities';
 import {
+  attachActionsJobStepLogs,
   actionsRunToMarkdown,
   buildTimelineEvents,
+  getActionsJobLogs,
   readActionsRunPreset,
   resolveActionsRunExportOptions,
   getActionsRun,
@@ -248,6 +250,10 @@ function combineWarnings(...warnings: Array<string | undefined>): string | undef
   return filtered.join(' ');
 }
 
+function isFailureConclusion(conclusion: string | null | undefined): boolean {
+  return (conclusion ?? '').toLowerCase() === 'failure';
+}
+
 function filterResolvedReviewComments(reviewComments: GitHubPullReviewComment[], commentResolution: Map<number, boolean> | null): {
   reviewComments: GitHubPullReviewComment[];
   warning?: string;
@@ -290,16 +296,64 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
     });
     const [run, jobs] = await Promise.all([
       getActionsRun({ owner, repo, runId, token }),
-      getActionsRunJobs({ owner, repo, runId, token }),
+      actionsRunExportState.options.includeJobs
+        ? getActionsRunJobs({ owner, repo, runId, token })
+        : Promise.resolve([]),
     ]);
+
+    let actionsWarning: string | undefined;
+    let jobsWithLogs = jobs;
+
+    if (actionsRunExportState.options.includeSteps && jobs.length) {
+      const jobsTarget = actionsRunExportState.options.onlyFailureJobs
+        ? jobs.filter((job) => isFailureConclusion(job.conclusion))
+        : jobs;
+
+      const logResults = await Promise.all(
+        jobsTarget.map(async (job) => {
+          try {
+            const rawLog = await getActionsJobLogs({ owner, repo, jobId: job.id, token });
+            return {
+              jobId: job.id,
+              rawLog,
+            };
+          } catch (error) {
+            console.warn('Failed to load Actions job log:', job.id, error);
+            return null;
+          }
+        }),
+      );
+
+      const logByJobId = new Map<number, string>();
+      let failedFetchCount = 0;
+      logResults.forEach((result) => {
+        if (!result) {
+          failedFetchCount += 1;
+          return;
+        }
+        logByJobId.set(result.jobId, result.rawLog);
+      });
+
+      jobsWithLogs = jobs.map((job) => {
+        const rawLog = logByJobId.get(job.id);
+        if (!rawLog) return job;
+        return attachActionsJobStepLogs(job, rawLog);
+      });
+
+      if (failedFetchCount > 0) {
+        actionsWarning =
+          `${failedFetchCount} job log(s) could not be downloaded, so some step logs may be missing.`;
+      }
+    }
 
     return {
       ok: true,
       markdown: actionsRunToMarkdown({
         run,
-        jobs,
+        jobs: jobsWithLogs,
         options: actionsRunExportState.options,
       }),
+      warning: actionsWarning,
     };
   }
 

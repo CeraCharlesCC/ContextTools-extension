@@ -40,6 +40,26 @@ async function fetchJson<T>(url: string, token?: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function fetchText(url: string, token?: string): Promise<string> {
+  const response = await fetch(url, {
+    headers: buildHeaders(token),
+    redirect: 'follow',
+  });
+  if (!response.ok) {
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const errorData = (await response.json()) as { message?: string };
+      if (errorData?.message) {
+        message = `${message} - ${errorData.message}`;
+      }
+    } catch {
+      // ignore JSON parsing errors
+    }
+    throw new Error(`GitHub API error: ${message}`);
+  }
+  return response.text();
+}
+
 function nextLink(linkHeader: string | null): string | null {
   if (!linkHeader) return null;
   const parts = linkHeader.split(',');
@@ -448,6 +468,17 @@ export async function getActionsRunJobs(params: {
       return Array.isArray(record?.jobs) ? record.jobs : [];
     },
   });
+}
+
+export async function getActionsJobLogs(params: {
+  owner: string;
+  repo: string;
+  jobId: number;
+  token?: string;
+}): Promise<string> {
+  const { owner, repo, jobId, token } = params;
+  const url = `${API_ROOT}/repos/${owner}/${repo}/actions/jobs/${jobId}/logs`;
+  return fetchText(url, token);
 }
 
 export async function getPullReviewThreadResolution(params: {

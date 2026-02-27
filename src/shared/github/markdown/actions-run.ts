@@ -127,6 +127,13 @@ export function actionsRunToMarkdown(input: {
         const status = step.status ?? 'Unknown';
         const conclusion = step.conclusion ?? 'none';
         lines.push(`- ${stepNumber}. ${stepName} - ${status}/${conclusion}`);
+        if (step.log?.trim()) {
+          lines.push('```text');
+          lines.push(step.log);
+          lines.push('```');
+        } else {
+          lines.push('_No step log available._');
+        }
       });
     }
   });
