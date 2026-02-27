@@ -2,6 +2,20 @@ import type { ExportOptions, ExportPreset } from '@domain/entities';
 
 export type PageKind = 'issue' | 'pull' | 'actions-run';
 
+export type ActionsRunExportPreset =
+  | 'only-summary'
+  | 'export-all'
+  | 'failure-job'
+  | 'failure-step';
+
+export interface ActionsRunExportOptions {
+  includeSummary: boolean;
+  includeJobs: boolean;
+  includeSteps: boolean;
+  onlyFailureJobs: boolean;
+  onlyFailureSteps: boolean;
+}
+
 interface BasePageRef {
   owner: string;
   repo: string;
@@ -41,6 +55,8 @@ export interface GenerateMarkdownPayload {
   range?: MarkerRange;
   preset?: ExportPreset;
   customOptions?: Partial<ExportOptions>;
+  actionsPreset?: ActionsRunExportPreset;
+  actionsOptions?: Partial<ActionsRunExportOptions>;
 }
 
 export interface GenerateMarkdownResponse {

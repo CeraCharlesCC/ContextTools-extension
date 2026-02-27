@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GitHubActionsJob, GitHubActionsRun } from '../types';
 import { actionsRunToMarkdown } from './actions-run';
+import { resolveActionsRunExportOptions } from './actions-run-export';
 
 const baseRun: GitHubActionsRun = {
   id: 100,
@@ -80,5 +81,58 @@ describe('actionsRunToMarkdown', () => {
     expect(markdown).toContain('### 1. no-steps-provided');
     expect(markdown).toContain('### 2. empty-steps-array');
     expect(markdown).toContain('_No steps provided._');
+  });
+
+  it('renders summary only preset without jobs section', () => {
+    const options = resolveActionsRunExportOptions({ preset: 'only-summary' }).options;
+    const markdown = actionsRunToMarkdown({
+      run: baseRun,
+      jobs: [{ id: 1, name: 'build', status: 'completed', conclusion: 'success' }],
+      options,
+    });
+
+    expect(markdown).toContain('# Actions Run: CI Pipeline');
+    expect(markdown).not.toContain('## Jobs');
+  });
+
+  it('renders only failed jobs for failure-job preset', () => {
+    const options = resolveActionsRunExportOptions({ preset: 'failure-job' }).options;
+    const markdown = actionsRunToMarkdown({
+      run: baseRun,
+      jobs: [
+        { id: 1, name: 'build', status: 'completed', conclusion: 'success' },
+        { id: 2, name: 'test', status: 'completed', conclusion: 'failure' },
+      ],
+      options,
+    });
+
+    expect(markdown).toContain('## Jobs (1)');
+    expect(markdown).not.toContain('### 1. build');
+    expect(markdown).toContain('### 1. test');
+  });
+
+  it('renders only failed steps for failure-step preset', () => {
+    const options = resolveActionsRunExportOptions({ preset: 'failure-step' }).options;
+    const markdown = actionsRunToMarkdown({
+      run: baseRun,
+      jobs: [
+        {
+          id: 1,
+          name: 'test',
+          status: 'completed',
+          conclusion: 'failure',
+          steps: [
+            { number: 1, name: 'Setup', status: 'completed', conclusion: 'success' },
+            { number: 2, name: 'Run tests', status: 'completed', conclusion: 'failure' },
+          ],
+        },
+      ],
+      options,
+    });
+
+    expect(markdown).toContain('## Jobs (1)');
+    expect(markdown).toContain('#### Steps (1)');
+    expect(markdown).toContain('- 2. Run tests - completed/failure');
+    expect(markdown).not.toContain('Setup - completed/success');
   });
 });

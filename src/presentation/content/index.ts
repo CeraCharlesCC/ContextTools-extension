@@ -3,8 +3,15 @@
  * Runs in the context of web pages
  */
 import { getBrowserAdapters } from '@infrastructure/adapters';
-import { copyToClipboard, findMarkerInElement, parsePageRef } from '@shared/github';
+import {
+  copyToClipboard,
+  findMarkerInElement,
+  parsePageRef,
+  resolveActionsRunExportOptions,
+} from '@shared/github';
 import type {
+  ActionsRunExportOptions,
+  ActionsRunExportPreset,
   GenerateMarkdownPayload,
   GenerateMarkdownResult,
   Marker,
@@ -22,7 +29,6 @@ import {
   showToast,
   updateMarkerHighlights,
   updateCopyButtonLabel,
-  createCopyButton,
   createCopyButtonGroup,
   findActionsRunAnchorContainer,
   findIssueAnchorButton,
@@ -60,6 +66,7 @@ let issueEnabled = true;
 
 let tempPullState: PullExportState | null = null;
 let tempIssueTimelineMode: boolean | null = null;
+let tempActionsRunState: ActionsRunExportState | null = null;
 let lastPullState: PullExportState | null = null;
 let lastIssueTimelineMode: boolean | null = null;
 
@@ -72,6 +79,11 @@ type IssueExportDefaults = {
   timelineMode: boolean;
 };
 
+interface ActionsRunExportState {
+  preset: ActionsRunExportPreset;
+  options: ActionsRunExportOptions;
+}
+
 let defaultPrSettings: PrExportDefaults = {
   defaultPreset: 'full-conversation',
   customOptions: createDefaultCustomOptions(),
@@ -80,6 +92,10 @@ let defaultPrSettings: PrExportDefaults = {
 let defaultIssueSettings: IssueExportDefaults = {
   timelineMode: true,
 };
+
+const defaultActionsRunState: ActionsRunExportState = resolveActionsRunExportOptions({
+  preset: 'export-all',
+});
 
 type LastExportStateKind = 'pull' | 'issue';
 
@@ -245,6 +261,13 @@ function resolveCurrentIssueTimelineMode(): boolean {
   return defaultIssueSettings.timelineMode;
 }
 
+function resolveCurrentActionsRunState(): ActionsRunExportState {
+  if (tempActionsRunState) {
+    return tempActionsRunState;
+  }
+  return defaultActionsRunState;
+}
+
 async function getLastExportState(kind: LastExportStateKind): Promise<unknown> {
   return adapters.messaging.sendMessage<
     {
@@ -345,6 +368,10 @@ async function handleCopyClick(): Promise<void> {
     payload.customOptions = {
       timelineMode: copiedIssueTimelineMode,
     };
+  } else if (currentPage.kind === 'actions-run') {
+    const actionsState = resolveCurrentActionsRunState();
+    payload.actionsPreset = actionsState.preset;
+    payload.actionsOptions = { ...actionsState.options };
   }
 
   try {
@@ -413,6 +440,19 @@ function buildDropdownOptions(): DropdownOptions {
         return nextState;
       },
       onResetMarkers: resetMarkerRange,
+    };
+  }
+
+  if (currentPage?.kind === 'actions-run') {
+    const currentState = resolveCurrentActionsRunState();
+    return {
+      kind: 'actions-run',
+      actionsRunPreset: currentState.preset,
+      onActionsRunPresetChange: (preset) => {
+        const nextState = resolveActionsRunExportOptions({ preset });
+        tempActionsRunState = nextState;
+        return nextState.preset;
+      },
     };
   }
 
@@ -585,13 +625,13 @@ function tryInjectActionsRunCopyButton(): void {
   const anchorContainer = findActionsRunAnchorContainer();
   if (!anchorContainer?.parentElement) return;
 
-  const button = createCopyButton(() => {
+  const result = createCopyButtonGroup(buildDropdownOptions(), () => {
     void handleCopyClick();
   });
 
-  copyButton = button;
-  resetMarkersButton = null;
-  anchorContainer.parentElement.insertBefore(button, anchorContainer);
+  copyButton = result.copyButton;
+  resetMarkersButton = result.resetMarkersButton;
+  anchorContainer.parentElement.insertBefore(result.group, anchorContainer);
   copyButtonInjected = true;
   updateCopyButtonState();
 }

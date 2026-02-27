@@ -9,6 +9,8 @@ import type { SettingsUpdate } from '@domain/entities';
 import {
   actionsRunToMarkdown,
   buildTimelineEvents,
+  readActionsRunPreset,
+  resolveActionsRunExportOptions,
   getActionsRun,
   getActionsRunJobs,
   getIssue,
@@ -282,6 +284,10 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
 
   if (payload.page.kind === 'actions-run') {
     const runId = payload.page.runId;
+    const actionsRunExportState = resolveActionsRunExportOptions({
+      preset: readActionsRunPreset(payload.actionsPreset),
+      options: payload.actionsOptions,
+    });
     const [run, jobs] = await Promise.all([
       getActionsRun({ owner, repo, runId, token }),
       getActionsRunJobs({ owner, repo, runId, token }),
@@ -289,7 +295,11 @@ async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<Gener
 
     return {
       ok: true,
-      markdown: actionsRunToMarkdown({ run, jobs }),
+      markdown: actionsRunToMarkdown({
+        run,
+        jobs,
+        options: actionsRunExportState.options,
+      }),
     };
   }
 
