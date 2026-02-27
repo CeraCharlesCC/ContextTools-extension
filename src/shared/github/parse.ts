@@ -3,6 +3,7 @@ import type { Marker, PageRef } from './types';
 const OWNER_REPO = '([A-Za-z0-9_.-]+)\\/([A-Za-z0-9_.-]+)';
 const ISSUE_PATH = new RegExp(`^\\/${OWNER_REPO}\\/issues\\/(\\d+)`, 'i');
 const PR_PATH = new RegExp(`^\\/${OWNER_REPO}\\/pull\\/(\\d+)`, 'i');
+const ACTIONS_RUN_PATH = new RegExp(`^\\/${OWNER_REPO}\\/actions\\/runs\\/(\\d+)`, 'i');
 
 const ISSUE_ANCHOR = /issuecomment-(\d+)/i;
 const REVIEW_COMMENT_ANCHOR = /discussion_r(\d+)/i;
@@ -19,6 +20,12 @@ export function parsePageRef(pathname: string): PageRef | null {
   if (prMatch) {
     const [, owner, repo, number] = prMatch;
     return { owner, repo, number: Number(number), kind: 'pull' };
+  }
+
+  const actionsRunMatch = pathname.match(ACTIONS_RUN_PATH);
+  if (actionsRunMatch) {
+    const [, owner, repo, runId] = actionsRunMatch;
+    return { owner, repo, runId: Number(runId), kind: 'actions-run' };
   }
 
   return null;

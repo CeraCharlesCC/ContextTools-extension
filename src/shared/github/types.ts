@@ -1,19 +1,34 @@
 import type { ExportOptions, ExportPreset } from '@domain/entities';
 
-export type PageKind = 'issue' | 'pull';
+export type PageKind = 'issue' | 'pull' | 'actions-run';
+
+interface BasePageRef {
+  owner: string;
+  repo: string;
+}
+
+export interface IssuePageRef extends BasePageRef {
+  kind: 'issue';
+  number: number;
+}
+
+export interface PullPageRef extends BasePageRef {
+  kind: 'pull';
+  number: number;
+}
+
+export interface ActionsRunPageRef extends BasePageRef {
+  kind: 'actions-run';
+  runId: number;
+}
+
+export type PageRef = IssuePageRef | PullPageRef | ActionsRunPageRef;
 
 export type MarkerType = 'issue-comment' | 'review-comment' | 'review';
 
 export interface Marker {
   type: MarkerType;
   id: number;
-}
-
-export interface PageRef {
-  owner: string;
-  repo: string;
-  number: number;
-  kind: PageKind;
 }
 
 export interface MarkerRange {
@@ -134,4 +149,43 @@ export interface GitHubPullRequest {
   deletions?: number;
   labels?: GitHubLabel[] | null;
   body?: string | null;
+}
+
+export interface GitHubActionsRun {
+  id: number;
+  name?: string | null;
+  html_url?: string;
+  status?: string;
+  conclusion?: string | null;
+  event?: string;
+  head_branch?: string | null;
+  head_sha?: string | null;
+  run_number?: number;
+  run_attempt?: number;
+  created_at?: string;
+  updated_at?: string;
+  actor?: GitHubUser | null;
+}
+
+export interface GitHubActionsJobStep {
+  number?: number;
+  name?: string;
+  status?: string;
+  conclusion?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface GitHubActionsJob {
+  id: number;
+  name?: string;
+  html_url?: string;
+  status?: string;
+  conclusion?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  runner_name?: string | null;
+  runner_group_name?: string | null;
+  labels?: string[];
+  steps?: GitHubActionsJobStep[];
 }

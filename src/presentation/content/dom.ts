@@ -400,15 +400,7 @@ export interface CopyButtonGroupResult {
     resetMarkersButton: HTMLButtonElement;
 }
 
-export function createCopyButtonGroup(
-    dropdownOpts: DropdownOptions,
-    onCopyClick: () => void,
-): CopyButtonGroupResult {
-    const group = document.createElement('div');
-    group.className = 'context-tools-button-group';
-    group.dataset.contextTools = 'button-group';
-    group.style.position = 'relative';
-
+export function createCopyButton(onCopyClick: () => void): HTMLButtonElement {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'context-tools-copy-button';
@@ -419,6 +411,19 @@ export function createCopyButtonGroup(
     <span class="context-tools-range-indicator" hidden></span>
   `;
     button.addEventListener('click', onCopyClick);
+    return button;
+}
+
+export function createCopyButtonGroup(
+    dropdownOpts: DropdownOptions,
+    onCopyClick: () => void,
+): CopyButtonGroupResult {
+    const group = document.createElement('div');
+    group.className = 'context-tools-button-group';
+    group.dataset.contextTools = 'button-group';
+    group.style.position = 'relative';
+
+    const button = createCopyButton(onCopyClick);
     group.appendChild(button);
 
     const trigger = document.createElement('button');
@@ -555,6 +560,42 @@ export function findPrAnchorButton(): HTMLElement | null {
     }
 
     return findControlByLabel(document, /\bedit pull request title\b/i);
+}
+
+export function findActionsRunAnchorContainer(): HTMLElement | null {
+    const rerunPattern = /^re-?run jobs?$/i;
+    const actionRegions = Array.from(
+        document.querySelectorAll<HTMLElement>('.PageHeader-actions, [data-component="PH_Actions"]'),
+    );
+
+    for (const region of actionRegions) {
+        const rerunTrigger = findControlByLabel(region, rerunPattern);
+        if (!rerunTrigger) {
+            continue;
+        }
+
+        const actionMenu = rerunTrigger.closest('action-menu');
+        if (actionMenu?.parentElement) {
+            return actionMenu.parentElement;
+        }
+    }
+
+    const fallbackHeaders = Array.from(
+        document.querySelectorAll<HTMLElement>('main header, page-header, .PageHeader'),
+    );
+    for (const header of fallbackHeaders) {
+        const rerunTrigger = findControlByLabel(header, rerunPattern);
+        if (!rerunTrigger) {
+            continue;
+        }
+
+        const actionMenu = rerunTrigger.closest('action-menu');
+        if (actionMenu?.parentElement) {
+            return actionMenu.parentElement;
+        }
+    }
+
+    return null;
 }
 
 // ---------------------------------------------------------------------------

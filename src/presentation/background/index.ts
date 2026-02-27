@@ -7,7 +7,10 @@ import { SettingsRepository } from '@infrastructure/repositories';
 import { GetSettingsUseCase, UpdateSettingsUseCase } from '@application/usecases';
 import type { SettingsUpdate } from '@domain/entities';
 import {
+  actionsRunToMarkdown,
   buildTimelineEvents,
+  getActionsRun,
+  getActionsRunJobs,
   getIssue,
   getIssueComments,
   getCommit,
@@ -92,10 +95,17 @@ async function getLastExportState(kind: PageKind): Promise<PullLastExportState |
   if (kind === 'pull') {
     return current.pull ?? null;
   }
-  return current.issue ?? null;
+  if (kind === 'issue') {
+    return current.issue ?? null;
+  }
+  return null;
 }
 
 async function setLastExportState(kind: PageKind, state: unknown): Promise<void> {
+  if (kind === 'actions-run') {
+    return;
+  }
+
   const current = await readLastExportState();
 
   if (kind === 'pull') {
@@ -268,7 +278,22 @@ function filterResolvedReviewComments(reviewComments: GitHubPullReviewComment[],
 
 async function generateMarkdown(payload: GenerateMarkdownPayload): Promise<GenerateMarkdownResult> {
   const token = await getGitHubToken();
-  const { owner, repo, number } = payload.page;
+  const { owner, repo } = payload.page;
+
+  if (payload.page.kind === 'actions-run') {
+    const runId = payload.page.runId;
+    const [run, jobs] = await Promise.all([
+      getActionsRun({ owner, repo, runId, token }),
+      getActionsRunJobs({ owner, repo, runId, token }),
+    ]);
+
+    return {
+      ok: true,
+      markdown: actionsRunToMarkdown({ run, jobs }),
+    };
+  }
+
+  const number = payload.page.number;
 
   const settings = await getSettingsUseCase.execute();
   const runtimeState = await readLastExportState();
