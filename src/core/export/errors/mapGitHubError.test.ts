@@ -78,4 +78,13 @@ describe('mapGitHubError', () => {
       message: 'Network error while contacting GitHub API.',
     });
   });
+
+  it('does not map non-network type errors to network', () => {
+    const mapped = mapGitHubError(new TypeError("Cannot read properties of undefined (reading 'foo')"));
+
+    expect(mapped).toEqual({
+      code: 'unknown',
+      message: "Cannot read properties of undefined (reading 'foo')",
+    });
+  });
 });

@@ -120,4 +120,33 @@ describe('GitHub client pagination safety', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('invokes default fetch with global scope binding', async () => {
+    const fetchMock = vi.fn(function (this: unknown) {
+      if (this !== globalThis) {
+        throw new TypeError("Failed to execute 'fetch' on 'WorkerGlobalScope': Illegal invocation");
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ number: 1 }), {
+          status: 200,
+        }),
+      );
+    });
+
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    const client = createGitHubClient({
+      token: 'secret-token',
+    });
+
+    const issue = await client.getIssue({
+      owner: 'octocat',
+      repo: 'hello-world',
+      number: 1,
+    });
+
+    expect(issue).toEqual({ number: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

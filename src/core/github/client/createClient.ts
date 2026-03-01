@@ -482,7 +482,8 @@ function toCommitTarget(params: CommitTarget): CommitTarget {
 }
 
 export function createGitHubClient(options: GitHubClientOptions = {}): GitHubClient {
-  const fetchFn = options.fetchFn ?? fetch;
+  const fetchImpl = options.fetchFn ?? globalThis.fetch;
+  const fetchFn = ((...args: Parameters<typeof fetch>) => fetchImpl.call(globalThis, ...args)) as typeof fetch;
   const token = options.token;
   const apiRoot = options.apiRoot ?? DEFAULT_API_ROOT;
   const trustedOrigin = new URL(apiRoot).origin;

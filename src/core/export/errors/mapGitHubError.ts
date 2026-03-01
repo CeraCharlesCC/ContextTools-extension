@@ -7,6 +7,24 @@ export interface MappedExportError {
   message: string;
 }
 
+const NETWORK_TYPE_ERROR_PATTERNS = [
+  'failed to fetch',
+  'fetch failed',
+  'networkerror',
+  'network request failed',
+  'load failed',
+  'internet disconnected',
+] as const;
+
+function isLikelyNetworkTypeError(error: TypeError): boolean {
+  const message = error.message.trim().toLowerCase();
+  if (!message) {
+    return false;
+  }
+
+  return NETWORK_TYPE_ERROR_PATTERNS.some((pattern) => message.includes(pattern));
+}
+
 function rateLimitMessage(error: GitHubApiError): string {
   if (typeof error.rateLimit.retryAfter === 'number' && error.rateLimit.retryAfter > 0) {
     return `GitHub rate limit reached. Retry after ${error.rateLimit.retryAfter} second(s).`;
@@ -64,7 +82,7 @@ export function mapGitHubError(error: unknown): MappedExportError {
     };
   }
 
-  if (error instanceof TypeError) {
+  if (error instanceof TypeError && isLikelyNetworkTypeError(error)) {
     return {
       code: 'network',
       message: 'Network error while contacting GitHub API.',
