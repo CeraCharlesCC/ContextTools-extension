@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Context Tools - Options</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+
+<body>
+  <div id="app">
+    <header class="header">
+      <h1>Context Tools Options</h1>
+      <p class="subtitle">Configure export defaults and runtime behavior</p>
+    </header>
+
+    <main class="main">
+      <section class="section">
+        <h2>Authentication</h2>
+
+        <div class="setting-row setting-row-column">
+          <div class="setting-info">
+            <label for="github-token">Personal Access Token (optional)</label>
+            <p class="setting-description">Stored locally under <code>ctx.auth.v1</code>. Recommended for higher API limits.</p>
+          </div>
+          <div class="token-row">
+            <input id="github-token" class="text-input" type="password" placeholder="ghp_..." autocomplete="off">
+            <button id="github-token-toggle" class="button secondary" type="button">Show</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Behavior</h2>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="remember-last-used-toggle">Remember Last Used Profile</label>
+            <p class="setting-description">When enabled, exports reuse your last used profile instead of defaults.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="remember-last-used-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="remember-scope-select">Remember Scope</label>
+            <p class="setting-description">Choose whether remembered profiles apply globally or per repository.</p>
+          </div>
+          <select id="remember-scope-select" class="select">
+            <option value="global">Global</option>
+            <option value="repo">Per Repository</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Enabled Targets</h2>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="pull-enabled-toggle">Pull Requests</label>
+            <p class="setting-description">Show export controls on pull request pages.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="pull-enabled-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="issue-enabled-toggle">Issues</label>
+            <p class="setting-description">Show export controls on issue pages.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="issue-enabled-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="actions-enabled-toggle">Actions Runs</label>
+            <p class="setting-description">Show export controls on Actions run pages.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="actions-enabled-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Pull Defaults</h2>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="pull-default-preset-select">Default Preset</label>
+            <p class="setting-description">Used when no remembered profile is available.</p>
+          </div>
+          <select id="pull-default-preset-select" class="select">
+            <option value="full-conversation">Full conversation</option>
+            <option value="with-diffs">With diffs</option>
+            <option value="review-comments-only">Review comments only</option>
+            <option value="commit-log">Commit log</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+
+        <div class="setting-row setting-row-column setting-row-no-divider">
+          <div class="setting-info">
+            <label>Default Custom Options</label>
+            <p class="setting-description">Applied when pull preset is <code>custom</code>.</p>
+          </div>
+          <div class="advanced-options-grid">
+            <div class="advanced-options-group">
+              <h3>Content</h3>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pull-custom-include-issue-comments-toggle">
+                <span>Include issue comments</span>
+              </label>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pull-custom-include-review-comments-toggle">
+                <span>Include review comments</span>
+              </label>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pull-custom-include-reviews-toggle">
+                <span>Include reviews</span>
+              </label>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pull-custom-include-commits-toggle">
+                <span>Include commits</span>
+              </label>
+            </div>
+
+            <div class="advanced-options-group">
+              <h3>Diffs</h3>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pull-custom-include-file-diffs-toggle">
+                <span>Include file diffs</span>
+              </label>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pull-custom-include-commit-diffs-toggle">
+                <span>Include commit diffs</span>
+              </label>
+              <label class="checkbox-row" id="pull-custom-smart-diff-row">
+                <input type="checkbox" id="pull-custom-smart-diff-mode-toggle">
+                <span>Smart diff mode</span>
+              </label>
+            </div>
+
+            <div class="advanced-options-group">
+              <h3>Ordering</h3>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pull-custom-timeline-mode-toggle">
+                <span>Timeline mode</span>
+              </label>
+            </div>
+
+            <div class="advanced-options-group">
+              <h3>Filters</h3>
+              <label class="checkbox-row">
+                <input type="checkbox" id="pull-custom-ignore-resolved-comments-toggle">
+                <span>Ignore resolved comments</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Issue Defaults</h2>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <label for="issue-timeline-mode-toggle">Timeline Mode</label>
+            <p class="setting-description">Show comments in chronological order</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="issue-timeline-mode-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Actions Defaults</h2>
+
+        <div class="setting-row setting-row-no-divider">
+          <div class="setting-info">
+            <label for="actions-default-preset-select">Default Preset</label>
+            <p class="setting-description">Controls summary/jobs/steps selection for Actions run exports.</p>
+          </div>
+          <select id="actions-default-preset-select" class="select">
+            <option value="only-summary">Only Summary</option>
+            <option value="export-all">Export All</option>
+            <option value="failure-job">Export Only Failure Job (Entire)</option>
+            <option value="failure-step">Export Only Failure Job's Failure Step</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>About</h2>
+        <div class="about-info">
+          <p><strong>Version:</strong> <span id="version">0.1.0</span></p>
+          <p><strong>Browser:</strong> <span id="browser-type">Detecting...</span></p>
+        </div>
+      </section>
+
+      <div class="save-status" id="save-status"></div>
+    </main>
+  </div>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+
+</html>
