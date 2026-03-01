@@ -1,10 +1,10 @@
 import {
-  enforceActionsRunInvariants,
-  enforcePullInvariants,
+  coerceActionsRunProfile,
+  coerceIssueProfile,
+  coercePullProfile,
+  createDefaultProfiles,
   isActionsRunPreset,
   isPullPreset,
-  resolveActionsRunPreset,
-  resolvePullPreset,
   targetRepoKey,
   type ExportProfile,
   type RememberScope,
@@ -28,22 +28,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+const defaultProfiles = createDefaultProfiles();
+
 function parsePullProfile(value: unknown): ExportProfile | null {
   if (!isRecord(value) || value.kind !== 'pull') {
     return null;
   }
 
-  const preset = isPullPreset(value.preset) ? value.preset : null;
-  if (!preset) {
+  if (!isPullPreset(value.preset)) {
     return null;
   }
 
-  const options = isRecord(value.options) ? value.options : undefined;
-  return {
-    kind: 'pull',
-    preset,
-    options: enforcePullInvariants(resolvePullPreset(preset, options)),
-  };
+  return coercePullProfile(value, defaultProfiles.pull);
 }
 
 function parseIssueProfile(value: unknown): ExportProfile | null {
@@ -55,10 +51,7 @@ function parseIssueProfile(value: unknown): ExportProfile | null {
     return null;
   }
 
-  return {
-    kind: 'issue',
-    timelineMode: value.timelineMode,
-  };
+  return coerceIssueProfile(value, defaultProfiles.issue);
 }
 
 function parseActionsRunProfile(value: unknown): ExportProfile | null {
@@ -66,36 +59,11 @@ function parseActionsRunProfile(value: unknown): ExportProfile | null {
     return null;
   }
 
-  const preset = isActionsRunPreset(value.preset) ? value.preset : null;
-  if (!preset) {
+  if (!isActionsRunPreset(value.preset)) {
     return null;
   }
 
-  const options = isRecord(value.options) ? value.options : undefined;
-  return {
-    kind: 'actionsRun',
-    preset,
-    options: enforceActionsRunInvariants(resolveActionsRunPreset(preset, options)),
-  };
-}
-
-function parseProfile(value: unknown): ExportProfile | null {
-  const pull = parsePullProfile(value);
-  if (pull) {
-    return pull;
-  }
-
-  const issue = parseIssueProfile(value);
-  if (issue) {
-    return issue;
-  }
-
-  const actions = parseActionsRunProfile(value);
-  if (actions) {
-    return actions;
-  }
-
-  return null;
+  return coerceActionsRunProfile(value, defaultProfiles.actionsRun);
 }
 
 function parseEntry(value: unknown): LastProfileEntry {
@@ -104,9 +72,9 @@ function parseEntry(value: unknown): LastProfileEntry {
   }
 
   return {
-    pull: parseProfile(value.pull) ?? undefined,
-    issue: parseProfile(value.issue) ?? undefined,
-    actionsRun: parseProfile(value.actionsRun) ?? undefined,
+    pull: parsePullProfile(value.pull) ?? undefined,
+    issue: parseIssueProfile(value.issue) ?? undefined,
+    actionsRun: parseActionsRunProfile(value.actionsRun) ?? undefined,
   };
 }
 

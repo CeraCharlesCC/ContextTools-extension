@@ -1,10 +1,5 @@
 import { bridgeClient } from '@ext/bridge';
-import type {
-  ActionsRunPreset,
-  PullExportOptions,
-  PullPreset,
-  SettingsPatchV1,
-} from '@core/model';
+import { isActionsRunPreset, isPullPreset, type PullExportOptions, type SettingsPatchV1 } from '@core/model';
 
 const rememberLastUsedToggle = document.getElementById('remember-last-used-toggle') as HTMLInputElement;
 const rememberScopeSelect = document.getElementById('remember-scope-select') as HTMLSelectElement;
@@ -44,21 +39,6 @@ function showStatus(message: string, type: 'success' | 'error'): void {
   window.setTimeout(() => {
     saveStatusEl.classList.remove('visible');
   }, 2000);
-}
-
-function isPullPreset(value: string): value is PullPreset {
-  return value === 'full-conversation'
-    || value === 'with-diffs'
-    || value === 'review-comments-only'
-    || value === 'commit-log'
-    || value === 'custom';
-}
-
-function isActionsRunPreset(value: string): value is ActionsRunPreset {
-  return value === 'only-summary'
-    || value === 'export-all'
-    || value === 'failure-job'
-    || value === 'failure-step';
 }
 
 function updateRememberScopeAvailability(): void {

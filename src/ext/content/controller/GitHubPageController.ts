@@ -1,12 +1,12 @@
 import { markerFromAnchor, parseTarget } from '@core/github';
 import {
+  clonePullOptions,
   resolveActionsRunPreset,
   type ActionsRunExportOptions,
   type ActionsRunPreset,
   type ExportRequest,
   type MarkerId,
   type MarkerRange,
-  type PullExportOptions,
   type Target,
 } from '@core/model';
 import { bridgeClient } from '@ext/bridge';
@@ -48,20 +48,6 @@ function createRequestId(): string {
   }
 
   return `ctx-export-${Date.now()}`;
-}
-
-function clonePullOptions(options: PullExportOptions): PullExportOptions {
-  return {
-    includeIssueComments: options.includeIssueComments,
-    includeReviewComments: options.includeReviewComments,
-    includeReviews: options.includeReviews,
-    includeCommits: options.includeCommits,
-    includeFileDiffs: options.includeFileDiffs,
-    includeCommitDiffs: options.includeCommitDiffs,
-    smartDiffMode: options.smartDiffMode,
-    timelineMode: options.timelineMode,
-    ignoreResolvedComments: options.ignoreResolvedComments,
-  };
 }
 
 function isMarkerPage(target: Target | null): target is Extract<Target, { kind: 'pull' | 'issue' }> {

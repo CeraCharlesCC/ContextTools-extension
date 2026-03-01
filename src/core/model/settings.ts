@@ -48,7 +48,7 @@ export interface SettingsV1 {
   defaults: SettingsDefaultsV1;
 }
 
-function coercePullProfile(value: unknown, fallback: PullProfile): PullProfile {
+export function coercePullProfile(value: unknown, fallback: PullProfile): PullProfile {
   if (!isRecord(value)) {
     return {
       kind: 'pull',
@@ -67,7 +67,7 @@ function coercePullProfile(value: unknown, fallback: PullProfile): PullProfile {
   };
 }
 
-function coerceIssueProfile(value: unknown, fallback: IssueProfile): IssueProfile {
+export function coerceIssueProfile(value: unknown, fallback: IssueProfile): IssueProfile {
   if (!isRecord(value)) {
     return {
       kind: 'issue',
@@ -81,7 +81,7 @@ function coerceIssueProfile(value: unknown, fallback: IssueProfile): IssueProfil
   };
 }
 
-function coerceActionsRunProfile(value: unknown, fallback: ActionsRunProfile): ActionsRunProfile {
+export function coerceActionsRunProfile(value: unknown, fallback: ActionsRunProfile): ActionsRunProfile {
   if (!isRecord(value)) {
     return {
       kind: 'actionsRun',
