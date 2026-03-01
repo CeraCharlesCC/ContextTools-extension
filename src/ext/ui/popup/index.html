@@ -1,36 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Context Tools</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
+
 <body>
-  <div id="app">
-    <header class="header">
-      <h1>Context Tools</h1>
+  <div id="app" class="popup-shell">
+    <header class="hero">
+      <p class="hero-kicker">Context Tools</p>
+      <h1>Quick Controls</h1>
+      <p class="hero-subtitle">Toggle where export buttons are active.</p>
     </header>
 
     <main class="main">
-      <section class="section">
-        <h2>Status</h2>
+      <section class="panel">
+        <h2>Enabled Targets</h2>
+
         <div class="status-row">
-          <span>Pull Requests</span>
+          <div class="status-info">
+            <strong>Pull Requests</strong>
+            <span>Show controls on PR pages</span>
+          </div>
           <label class="toggle">
             <input type="checkbox" id="pull-enabled-toggle">
             <span class="toggle-slider"></span>
           </label>
         </div>
+
         <div class="status-row">
-          <span>Issues</span>
+          <div class="status-info">
+            <strong>Issues</strong>
+            <span>Show controls on issue pages</span>
+          </div>
           <label class="toggle">
             <input type="checkbox" id="issue-enabled-toggle">
             <span class="toggle-slider"></span>
           </label>
         </div>
-        <div class="status-row">
-          <span>Actions Runs</span>
+
+        <div class="status-row status-row-last">
+          <div class="status-info">
+            <strong>Actions Runs</strong>
+            <span>Show controls on run detail pages</span>
+          </div>
           <label class="toggle">
             <input type="checkbox" id="actions-enabled-toggle">
             <span class="toggle-slider"></span>
@@ -38,19 +54,20 @@
         </div>
       </section>
 
-      <section class="section">
-        <h2>Current Page</h2>
-        <div id="page-info">
+      <section class="panel">
+        <h2>Current Tab</h2>
+        <div id="page-info" class="page-info">
           <p class="loading">Loading...</p>
         </div>
       </section>
 
-      <section class="section actions">
-        <button id="options-btn" class="btn btn-secondary">Options</button>
+      <section class="panel action-panel">
+        <button id="options-btn" class="btn btn-primary">Open Full Settings</button>
       </section>
     </main>
   </div>
 
   <script type="module" src="./main.ts"></script>
 </body>
+
 </html>
