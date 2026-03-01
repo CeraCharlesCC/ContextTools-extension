@@ -1,0 +1,40 @@
+{
+  "request": {
+    "requestId": "fixture-issue",
+    "target": {
+      "kind": "issue",
+      "owner": "octocat",
+      "repo": "hello-world",
+      "number": 9
+    },
+    "profile": {
+      "kind": "issue",
+      "timelineMode": true
+    }
+  },
+  "responses": {
+    "issue": {
+      "id": 9,
+      "title": "Fixture Issue",
+      "html_url": "https://github.com/octocat/hello-world/issues/9",
+      "state": "open",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-02T00:00:00Z",
+      "user": { "login": "octocat" },
+      "body": "Fixture issue body"
+    },
+    "comments": [
+      {
+        "id": 21,
+        "created_at": "2026-01-03T00:00:00Z",
+        "body": "Fixture issue comment",
+        "user": { "login": "alice" }
+      }
+    ]
+  },
+  "expectedContains": [
+    "# Issue: Fixture Issue",
+    "## Comments (1)",
+    "Fixture issue comment"
+  ]
+}

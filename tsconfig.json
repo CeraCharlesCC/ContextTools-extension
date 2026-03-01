@@ -25,20 +25,14 @@
     "sourceMap": true,
     "baseUrl": ".",
     "paths": {
-      "@domain/*": [
-        "src/domain/*"
+      "@core": [
+        "src/core/index.ts"
       ],
-      "@application/*": [
-        "src/application/*"
+      "@core/*": [
+        "src/core/*"
       ],
-      "@infrastructure/*": [
-        "src/infrastructure/*"
-      ],
-      "@presentation/*": [
-        "src/presentation/*"
-      ],
-      "@shared/*": [
-        "src/shared/*"
+      "@ext/*": [
+        "src/ext/*"
       ]
     }
   },

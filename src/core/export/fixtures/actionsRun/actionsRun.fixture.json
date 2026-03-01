@@ -1,0 +1,58 @@
+{
+  "request": {
+    "requestId": "fixture-actions",
+    "target": {
+      "kind": "actionsRun",
+      "owner": "octocat",
+      "repo": "hello-world",
+      "runId": 88
+    },
+    "profile": {
+      "kind": "actionsRun",
+      "preset": "export-all",
+      "options": {
+        "includeSummary": true,
+        "includeJobs": true,
+        "includeSteps": true,
+        "onlyFailureJobs": false,
+        "onlyFailureSteps": false
+      }
+    }
+  },
+  "responses": {
+    "run": {
+      "id": 88,
+      "name": "Fixture CI",
+      "html_url": "https://github.com/octocat/hello-world/actions/runs/88",
+      "status": "completed",
+      "conclusion": "success",
+      "event": "push",
+      "head_branch": "main",
+      "head_sha": "abc123",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:05:00Z",
+      "actor": { "login": "octocat" }
+    },
+    "jobs": [
+      {
+        "id": 801,
+        "name": "build",
+        "status": "completed",
+        "conclusion": "success",
+        "steps": [
+          {
+            "number": 1,
+            "name": "checkout",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      }
+    ]
+  },
+  "expectedContains": [
+    "# Actions Run: Fixture CI",
+    "## Jobs (1)",
+    "checkout"
+  ]
+}

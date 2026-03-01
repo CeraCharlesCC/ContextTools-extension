@@ -9,11 +9,8 @@ const outDir = isFirefox ? 'dist-firefox' : 'dist-chrome';
 const commonConfig = {
   resolve: {
     alias: {
-      '@domain': resolve(__dirname, 'src/domain'),
-      '@application': resolve(__dirname, 'src/application'),
-      '@infrastructure': resolve(__dirname, 'src/infrastructure'),
-      '@presentation': resolve(__dirname, 'src/presentation'),
-      '@shared': resolve(__dirname, 'src/shared'),
+      '@core': resolve(__dirname, 'src/core'),
+      '@ext': resolve(__dirname, 'src/ext'),
     },
   },
   define: {
@@ -32,7 +29,7 @@ const contentScriptConfig: UserConfig = {
     sourcemap: process.env.NODE_ENV === 'development' ? 'inline' : false,
     minify: process.env.NODE_ENV === 'production',
     lib: {
-      entry: resolve(__dirname, 'src/presentation/content/index.ts'),
+      entry: resolve(__dirname, 'src/ext/content/index.ts'),
       name: 'ContextToolsContent',
       formats: ['iife'],
       fileName: () => 'content/index.js',
@@ -55,9 +52,9 @@ const mainConfig: UserConfig = {
     minify: process.env.NODE_ENV === 'production',
     rollupOptions: {
       input: {
-        background: resolve(__dirname, 'src/presentation/background/index.ts'),
-        popup: resolve(__dirname, 'src/presentation/popup/index.html'),
-        options: resolve(__dirname, 'src/presentation/options/index.html'),
+        background: resolve(__dirname, 'src/ext/background/index.ts'),
+        popup: resolve(__dirname, 'src/ext/ui/popup/index.html'),
+        options: resolve(__dirname, 'src/ext/ui/options/index.html'),
       },
       output: {
         entryFileNames: '[name]/index.js',
@@ -85,8 +82,8 @@ const mainConfig: UserConfig = {
 
         // Relocate HTML files from nested paths to expected locations
         const htmlRelocations = [
-          { from: 'src/presentation/popup/index.html', to: 'popup/index.html' },
-          { from: 'src/presentation/options/index.html', to: 'options/index.html' },
+          { from: 'src/ext/ui/popup/index.html', to: 'popup/index.html' },
+          { from: 'src/ext/ui/options/index.html', to: 'options/index.html' },
         ];
 
         for (const { from, to } of htmlRelocations) {
