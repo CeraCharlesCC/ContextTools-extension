@@ -449,6 +449,7 @@ export interface CopyButtonGroupResult {
     copyButton: HTMLButtonElement;
     settingsDropdown: HTMLDivElement;
     resetMarkersButton: HTMLButtonElement | null;
+    dispose: () => void;
 }
 
 export function createCopyButton(onCopyClick: () => void): HTMLButtonElement {
@@ -492,14 +493,22 @@ export function createCopyButtonGroup(
     });
     group.appendChild(trigger);
 
-    // Close dropdown when clicking outside
-    document.addEventListener('click', (e) => {
+    // Close dropdown when clicking outside. The group may be replaced by GitHub's
+    // rendering, so the controller must be able to remove this listener.
+    const closeOnOutsideClick = (e: MouseEvent): void => {
         if (!group.contains(e.target as Node)) {
             dropdown.hidden = true;
         }
-    });
+    };
+    document.addEventListener('click', closeOnOutsideClick);
 
-    return { group, copyButton: button, settingsDropdown: dropdown, resetMarkersButton };
+    return {
+        group,
+        copyButton: button,
+        settingsDropdown: dropdown,
+        resetMarkersButton,
+        dispose: () => document.removeEventListener('click', closeOnOutsideClick),
+    };
 }
 
 // ---------------------------------------------------------------------------

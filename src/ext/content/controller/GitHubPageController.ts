@@ -130,6 +130,7 @@ export class GitHubPageController {
   private menuObserver: MutationObserver | null = null;
   private pendingInjectFrame: number | null = null;
   private copyButtonInjected = false;
+  private disposeCopyButtonGroup: (() => void) | null = null;
 
   async init(): Promise<void> {
     if (window.location.hostname !== 'github.com') {
@@ -149,6 +150,7 @@ export class GitHubPageController {
 
   dispose(): void {
     this.disconnectPageObserver();
+    this.clearCopyButtonReferences();
     if (this.menuObserver) {
       this.menuObserver.disconnect();
       this.menuObserver = null;
@@ -431,24 +433,21 @@ export class GitHubPageController {
 
   private observePageUpdates(): void {
     this.pageObserver = new MutationObserver(() => {
-      if (!this.currentTarget) {
+      if (!this.currentTarget || this.copyButton?.isConnected) {
         return;
       }
 
-      if (this.currentTarget.kind === 'actionsRun') {
-        const existing = document.querySelector(COPY_BUTTON_SELECTOR);
-        if (existing) {
-          this.copyButtonInjected = true;
-          this.copyButton = existing as HTMLButtonElement;
-          return;
-        }
-
-        this.copyButtonInjected = false;
-        this.copyButton = null;
-      } else if (this.copyButtonInjected) {
+      const existing = document.querySelector(COPY_BUTTON_SELECTOR);
+      if (existing) {
+        this.clearCopyButtonReferences();
+        this.copyButtonInjected = true;
+        this.copyButton = existing as HTMLButtonElement;
         return;
       }
 
+      // GitHub can replace the entire header while resolving the PR merge
+      // status. Our button is removed with it, so allow a fresh injection.
+      this.clearCopyButtonReferences();
       if (this.pendingInjectFrame !== null) {
         return;
       }
@@ -477,6 +476,14 @@ export class GitHubPageController {
     }
   }
 
+  private clearCopyButtonReferences(): void {
+    this.disposeCopyButtonGroup?.();
+    this.disposeCopyButtonGroup = null;
+    this.copyButtonInjected = false;
+    this.copyButton = null;
+    this.resetMarkersButton = null;
+  }
+
   private tryInjectMarkerPageCopyGroup(): void {
     if (!isMarkerPage(this.currentTarget) || this.copyButtonInjected) {
       return;
@@ -493,10 +500,10 @@ export class GitHubPageController {
 
     this.copyButton = result.copyButton;
     this.resetMarkersButton = result.resetMarkersButton;
+    this.disposeCopyButtonGroup = result.dispose;
     anchor.parentElement.insertBefore(result.group, anchor);
     this.copyButtonInjected = true;
-    this.updateCopyButtonState();
-    this.disconnectPageObserver();
+    this.setCopyButtonInFlightState(this.isCopying);
   }
 
   private tryInjectActionsRunCopyButton(): void {
@@ -515,13 +522,14 @@ export class GitHubPageController {
 
     this.copyButton = result.copyButton;
     this.resetMarkersButton = result.resetMarkersButton;
+    this.disposeCopyButtonGroup = result.dispose;
     anchorContainer.parentElement.insertBefore(result.group, anchorContainer);
     this.copyButtonInjected = true;
-    this.updateCopyButtonState();
+    this.setCopyButtonInFlightState(this.isCopying);
   }
 
   private tryInjectCopyButton(): void {
-    if (!this.currentTarget || (this.copyButtonInjected && this.currentTarget.kind !== 'actionsRun')) {
+    if (!this.currentTarget) {
       return;
     }
 
@@ -529,13 +537,11 @@ export class GitHubPageController {
     if (existing) {
       this.copyButton = existing as HTMLButtonElement;
       this.copyButtonInjected = true;
-      this.updateCopyButtonState();
-      if (this.currentTarget.kind !== 'actionsRun') {
-        this.disconnectPageObserver();
-      }
+      this.setCopyButtonInFlightState(this.isCopying);
       return;
     }
 
+    this.clearCopyButtonReferences();
     if (this.currentTarget.kind === 'actionsRun') {
       this.tryInjectActionsRunCopyButton();
       return;
@@ -587,13 +593,12 @@ export class GitHubPageController {
 
   private async handlePageChange(): Promise<void> {
     this.disconnectPageObserver();
+    this.removeExistingCopyButton();
+    this.clearCopyButtonReferences();
 
     this.currentTarget = parseTarget(window.location.pathname);
     this.markerRange = {};
     this.lastMarkerCandidate = null;
-    this.copyButtonInjected = false;
-    this.copyButton = null;
-    this.resetMarkersButton = null;
     this.updateCopyButtonState();
 
     if (!this.currentTarget || !this.resolveCurrentPageEnabled()) {
@@ -603,10 +608,7 @@ export class GitHubPageController {
 
     await this.loadEffectiveProfile();
     this.tryInjectCopyButton();
-
-    if (this.currentTarget.kind === 'actionsRun' || !this.copyButtonInjected) {
-      this.observePageUpdates();
-    }
+    this.observePageUpdates();
   }
 
   private async handleCopyClick(): Promise<void> {
