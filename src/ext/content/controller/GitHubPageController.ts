@@ -1,15 +1,18 @@
 import { markerFromAnchor, parseTarget } from '@core/github';
 import {
   clonePullOptions,
+  coerceSettingsV1,
   resolveActionsRunPreset,
   type ActionsRunExportOptions,
   type ActionsRunPreset,
   type ExportRequest,
   type MarkerId,
   type MarkerRange,
+  type SettingsV1,
   type Target,
 } from '@core/model';
 import { bridgeClient } from '@ext/bridge';
+import { SETTINGS_STORAGE_KEY } from '@ext/bridge/keys';
 import { copyToClipboard } from '../clipboard';
 import {
   applyAdvancedToggle,
@@ -107,9 +110,27 @@ export class GitHubPageController {
   private resetMarkersButton: HTMLButtonElement | null = null;
   private lastMarkerCandidate: MarkerId | null = null;
 
-  private isEnabled = true;
   private isCopying = false;
   private activeRequestId: string | null = null;
+  private initialized = false;
+  private disposed = false;
+  private pageVersion = 0;
+  private disposeMenuClicks: (() => void) | null = null;
+  private settingsVersion = 0;
+  private observingSettings = false;
+
+  private readonly onSettingsChanged = (
+    changes: Record<string, chrome.storage.StorageChange>,
+    areaName: string,
+  ): void => {
+    if (this.disposed || areaName !== 'local' || !changes[SETTINGS_STORAGE_KEY]) return;
+    const wasEnabled = this.resolveCurrentPageEnabled();
+    this.settingsVersion += 1;
+    this.applySettings(coerceSettingsV1(changes[SETTINGS_STORAGE_KEY].newValue));
+    if (this.initialized && wasEnabled !== this.resolveCurrentPageEnabled()) {
+      void this.handlePageChange();
+    }
+  };
 
   private pullEnabled = true;
   private issueEnabled = true;
@@ -137,20 +158,34 @@ export class GitHubPageController {
       return;
     }
 
+    chrome.storage.onChanged.addListener(this.onSettingsChanged);
+    this.observingSettings = true;
     await this.loadSettings();
-    if (!this.isEnabled) {
+    if (this.disposed) {
       return;
     }
 
+    this.initialized = true;
     ensureStyles();
     await this.handlePageChange();
+    if (this.disposed) return;
     this.observeMenus();
     this.trackMenuClicks();
   }
 
   dispose(): void {
+    this.disposed = true;
+    this.pageVersion += 1;
+    this.cancelActiveExport();
     this.disconnectPageObserver();
+    this.removeExistingCopyButton();
     this.clearCopyButtonReferences();
+    this.disposeMenuClicks?.();
+    this.disposeMenuClicks = null;
+    if (this.observingSettings) {
+      chrome.storage.onChanged.removeListener(this.onSettingsChanged);
+      this.observingSettings = false;
+    }
     if (this.menuObserver) {
       this.menuObserver.disconnect();
       this.menuObserver = null;
@@ -158,43 +193,44 @@ export class GitHubPageController {
   }
 
   onNavigation(): void {
+    if (!this.initialized || this.disposed) return;
     void this.handlePageChange();
   }
 
   private async loadSettings(): Promise<void> {
+    const settingsVersion = this.settingsVersion;
     try {
       const settings = await bridgeClient.call('settings.get', null);
-      this.pullEnabled = settings.enabled.pull;
-      this.issueEnabled = settings.enabled.issue;
-      this.actionsRunEnabled = settings.enabled.actionsRun;
-      this.isEnabled = this.pullEnabled || this.issueEnabled || this.actionsRunEnabled;
-
-      this.defaultPullState = createPullExportState(
-        settings.defaults.pull.preset,
-        settings.defaults.pull.options,
-      );
-      this.defaultIssueTimelineMode = settings.defaults.issue.timelineMode;
-      this.defaultActionsRunState = {
-        preset: settings.defaults.actionsRun.preset,
-        options: resolveActionsRunPreset(
-          settings.defaults.actionsRun.preset,
-          settings.defaults.actionsRun.options,
-        ),
-      };
+      if (!this.disposed && settingsVersion === this.settingsVersion) this.applySettings(settings);
     } catch {
       // Keep local defaults when settings are unavailable.
     }
   }
 
-  private async loadEffectiveProfile(): Promise<void> {
-    if (!this.currentTarget) {
-      return;
-    }
+  private applySettings(settings: SettingsV1): void {
+    this.pullEnabled = settings.enabled.pull;
+    this.issueEnabled = settings.enabled.issue;
+    this.actionsRunEnabled = settings.enabled.actionsRun;
+    this.defaultPullState = createPullExportState(
+      settings.defaults.pull.preset,
+      settings.defaults.pull.options,
+    );
+    this.defaultIssueTimelineMode = settings.defaults.issue.timelineMode;
+    this.defaultActionsRunState = {
+      preset: settings.defaults.actionsRun.preset,
+      options: resolveActionsRunPreset(
+        settings.defaults.actionsRun.preset,
+        settings.defaults.actionsRun.options,
+      ),
+    };
+  }
 
+  private async loadEffectiveProfile(target: Target, pageVersion: number): Promise<void> {
     try {
       const response = await bridgeClient.call('profile.getEffective', {
-        target: this.currentTarget,
+        target,
       });
+      if (this.disposed || pageVersion !== this.pageVersion) return;
       const { profile } = response;
 
       if (profile.kind === 'pull') {
@@ -333,7 +369,7 @@ export class GitHubPageController {
   }
 
   private injectMenuItems(menu: Element): void {
-    if (!isMarkerPage(this.currentTarget)) {
+    if (!isMarkerPage(this.currentTarget) || !this.resolveCurrentPageEnabled()) {
       return;
     }
 
@@ -571,8 +607,8 @@ export class GitHubPageController {
         return;
       }
 
-      const target = event.target as Element | null;
-      if (!target) {
+      const target = event.target;
+      if (!(target instanceof Element)) {
         return;
       }
 
@@ -582,23 +618,42 @@ export class GitHubPageController {
       }
 
       const marker = findMarkerInElement(trigger);
-      if (marker) {
-        this.lastMarkerCandidate = marker;
-      }
+      this.lastMarkerCandidate = marker;
     };
 
     document.addEventListener('pointerdown', updateCandidate, true);
     document.addEventListener('click', updateCandidate);
+    this.disposeMenuClicks = () => {
+      document.removeEventListener('pointerdown', updateCandidate, true);
+      document.removeEventListener('click', updateCandidate);
+    };
+  }
+
+  private cancelActiveExport(): void {
+    const requestId = this.activeRequestId;
+    this.activeRequestId = null;
+    this.isCopying = false;
+    if (requestId) {
+      void bridgeClient.call('export.cancel', { requestId }).catch(() => {
+        // The old request may have already completed; its response is ignored.
+      });
+    }
   }
 
   private async handlePageChange(): Promise<void> {
+    const pageVersion = ++this.pageVersion;
+    this.cancelActiveExport();
     this.disconnectPageObserver();
     this.removeExistingCopyButton();
     this.clearCopyButtonReferences();
 
     this.currentTarget = parseTarget(window.location.pathname);
+    document.querySelectorAll(MENU_ITEM_SELECTOR).forEach((item) => item.remove());
     this.markerRange = {};
     this.lastMarkerCandidate = null;
+    this.tempPullState = null;
+    this.tempIssueTimelineMode = null;
+    this.tempActionsRunState = null;
     this.updateCopyButtonState();
 
     if (!this.currentTarget || !this.resolveCurrentPageEnabled()) {
@@ -606,7 +661,8 @@ export class GitHubPageController {
       return;
     }
 
-    await this.loadEffectiveProfile();
+    await this.loadEffectiveProfile(this.currentTarget, pageVersion);
+    if (this.disposed || pageVersion !== this.pageVersion) return;
     this.tryInjectCopyButton();
     this.observePageUpdates();
   }
@@ -617,19 +673,21 @@ export class GitHubPageController {
     }
 
     if (this.isCopying && this.activeRequestId) {
+      const requestId = this.activeRequestId;
       try {
         await bridgeClient.call('export.cancel', {
-          requestId: this.activeRequestId,
+          requestId,
         });
-        showToast('Canceling export...', 'warning');
+        if (this.activeRequestId === requestId) showToast('Canceling export...', 'warning');
       } catch {
-        showToast('Failed to cancel export.', 'error');
+        if (this.activeRequestId === requestId) showToast('Failed to cancel export.', 'error');
       }
       return;
     }
 
     this.isCopying = true;
     this.activeRequestId = createRequestId();
+    const requestId = this.activeRequestId;
     this.setCopyButtonInFlightState(true);
 
     const request: ExportRequest = {
@@ -669,6 +727,7 @@ export class GitHubPageController {
 
     try {
       const result = await bridgeClient.call('export.run', request);
+      if (this.disposed || this.activeRequestId !== requestId) return;
       if (!result.ok) {
         if (result.code === 'aborted') {
           showToast('Export canceled.', 'warning');
@@ -691,16 +750,21 @@ export class GitHubPageController {
       }
 
       await copyToClipboard(result.markdown);
+      if (this.disposed || this.activeRequestId !== requestId) return;
       showToast('Copied Markdown to clipboard.');
       if (result.warning) {
         showToast(result.warning, 'warning');
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Copy failed.', 'error');
+      if (this.activeRequestId === requestId) {
+        showToast(error instanceof Error ? error.message : 'Copy failed.', 'error');
+      }
     } finally {
-      this.isCopying = false;
-      this.activeRequestId = null;
-      this.setCopyButtonInFlightState(false);
+      if (this.activeRequestId === requestId) {
+        this.isCopying = false;
+        this.activeRequestId = null;
+        this.setCopyButtonInFlightState(false);
+      }
     }
   }
 }

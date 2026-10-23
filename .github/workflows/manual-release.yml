@@ -39,8 +39,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Sync versions
-        run: npm run sync:versions
+      - name: Verify versions are synced
+        run: npm run sync:versions:check
 
       - name: Lint
         run: npm run lint
@@ -48,15 +48,19 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build
 
       - name: Resolve release metadata
         id: release_meta
+        env:
+          TAG_INPUT: ${{ inputs.tag }}
+          NAME_INPUT: ${{ inputs.name }}
         run: |
           VERSION="$(node -p "require('./package.json').version")"
-          TAG_INPUT="${{ github.event.inputs.tag }}"
-          NAME_INPUT="${{ github.event.inputs.name }}"
 
           if [ -n "$TAG_INPUT" ]; then
             TAG="$TAG_INPUT"
@@ -68,6 +72,12 @@ jobs:
             RELEASE_NAME="$NAME_INPUT"
           else
             RELEASE_NAME="$TAG"
+          fi
+
+          git check-ref-format "refs/tags/$TAG"
+          if [[ "$RELEASE_NAME" == *$'\n'* || "$RELEASE_NAME" == *$'\r'* ]]; then
+            echo 'Release name must be a single line.' >&2
+            exit 1
           fi
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"

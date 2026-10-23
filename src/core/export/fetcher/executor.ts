@@ -1,3 +1,5 @@
+import { throwIfAborted } from '@core/github/client/errors';
+
 export interface ExecuteTasksOptions {
   concurrency?: number;
   signal?: AbortSignal;
@@ -14,6 +16,7 @@ export async function executeTasks<T>(
   tasks: Array<() => Promise<T>>,
   options: ExecuteTasksOptions = {},
 ): Promise<T[]> {
+  throwIfAborted(options.signal);
   if (!tasks.length) {
     return [];
   }
@@ -22,16 +25,21 @@ export async function executeTasks<T>(
   const concurrency = normalizeConcurrency(options.concurrency ?? 4);
   const results = new Array<T>(tasks.length);
   let nextTaskIndex = 0;
+  let failed = false;
 
   async function worker(): Promise<void> {
-    while (nextTaskIndex < tasks.length) {
-      if (signal?.aborted) {
-        throw new DOMException('The operation was aborted.', 'AbortError');
-      }
+    while (!failed && nextTaskIndex < tasks.length) {
+      throwIfAborted(signal);
 
       const taskIndex = nextTaskIndex;
       nextTaskIndex += 1;
-      results[taskIndex] = await tasks[taskIndex]();
+      try {
+        results[taskIndex] = await tasks[taskIndex]();
+        throwIfAborted(signal);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
     }
   }
 

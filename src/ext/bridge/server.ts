@@ -61,10 +61,6 @@ async function invokeHandler<M extends BridgeMethodName>(
 
 export function registerBridgeHandlers(handlers: BridgeHandlerMap): void {
   addRuntimeMessageListener<unknown, unknown>(async (rawMessage, sender) => {
-    if (!isBridgeRequestEnvelope(rawMessage)) {
-      return null;
-    }
-
     let request: BridgeRequestEnvelope;
     try {
       request = validateRequestEnvelope(rawMessage);
@@ -82,5 +78,5 @@ export function registerBridgeHandlers(handlers: BridgeHandlerMap): void {
     } catch (error) {
       return errorEnvelope(request, error);
     }
-  });
+  }, isBridgeRequestEnvelope);
 }

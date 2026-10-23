@@ -1,24 +1,29 @@
 import { z } from 'zod';
 import type { BridgeMethodName } from './protocol';
 
+const ownerSchema = z.string().regex(/^[A-Za-z0-9-]+$/);
+const repositorySegmentSchema = z.string()
+  .regex(/^[A-Za-z0-9_.-]+$/)
+  .refine((value) => value !== '.' && value !== '..', 'Invalid repository path segment.');
+
 const targetSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('pull'),
-    owner: z.string().min(1),
-    repo: z.string().min(1),
-    number: z.number().int().positive(),
+    owner: ownerSchema,
+    repo: repositorySegmentSchema,
+    number: z.number().int().positive().safe(),
   }),
   z.object({
     kind: z.literal('issue'),
-    owner: z.string().min(1),
-    repo: z.string().min(1),
-    number: z.number().int().positive(),
+    owner: ownerSchema,
+    repo: repositorySegmentSchema,
+    number: z.number().int().positive().safe(),
   }),
   z.object({
     kind: z.literal('actionsRun'),
-    owner: z.string().min(1),
-    repo: z.string().min(1),
-    runId: z.number().int().positive(),
+    owner: ownerSchema,
+    repo: repositorySegmentSchema,
+    runId: z.number().int().positive().safe(),
   }),
 ]);
 

@@ -1,5 +1,5 @@
 import { isFailureConclusion } from '@core/actions';
-import { isAbortError, type GitHubClient } from '@core/github/client';
+import { isAbortError, throwIfAborted, type GitHubClient } from '@core/github/client';
 import type {
   GitHubCommit,
   GitHubIssueComment,
@@ -159,6 +159,7 @@ export async function runExportPipeline(
   request: ExportRequest,
   deps: ExportPipelineDeps,
 ): Promise<ExportPipelineOutput> {
+  throwIfAborted(deps.signal);
   const cache = deps.cache ?? new TtlCache<unknown>(deps.cacheTtlMs ?? 30_000, deps.now ?? (() => Date.now()));
   const authScopeKey = deps.authScopeKey ?? 'anon';
   const concurrency = deps.concurrency ?? 4;
@@ -193,6 +194,7 @@ export async function runExportPipeline(
           })
         : Promise.resolve([]),
     ]);
+    throwIfAborted(deps.signal);
 
     let warning: string | undefined;
     let jobsWithLogs = jobs;
@@ -221,6 +223,7 @@ export async function runExportPipeline(
             rawLog,
           };
         } catch (error) {
+          throwIfAborted(deps.signal);
           if (isAbortError(error)) {
             throw error;
           }
@@ -288,6 +291,7 @@ export async function runExportPipeline(
           })
         : Promise.resolve([]),
     ]);
+    throwIfAborted(deps.signal);
 
     const range = readSelectionRange(request);
     const selectionResult = sliceIssueComments(comments, range);
@@ -369,10 +373,28 @@ export async function runExportPipeline(
     filesPromise,
     commitsPromise,
   ]);
+  throwIfAborted(deps.signal);
 
-  let detailedCommits = commits;
-  if (plan.shouldFetchCommits && plan.includeCommitDiffs && commits.length) {
-    const tasks = commits.map((commit) => async () => {
+  const range = readSelectionRange(request);
+  const timelineSelection = range?.start || range?.end
+    ? slicePullTimeline(buildTimelineEvents({
+        commits: plan.includeCommits ? commits : undefined,
+        issueComments: plan.includeIssueComments ? issueComments : undefined,
+        reviewComments: plan.includeReviewComments ? reviewComments : undefined,
+        reviews: plan.includeReviews ? reviews : undefined,
+      }), range)
+    : undefined;
+  if (timelineSelection && 'error' in timelineSelection) {
+    throw new ExportPipelineError('invalidSelection', timelineSelection.error);
+  }
+  const selectedCommits = timelineSelection
+    ? timelineSelection.events.filter(isCommitEvent).map((event) => event.commit)
+    : commits;
+
+  let failedCommitFetchCount = 0;
+  let detailedCommits = selectedCommits;
+  if (plan.shouldFetchCommits && plan.includeCommitDiffs && selectedCommits.length) {
+    const tasks = selectedCommits.map((commit) => async () => {
       if (!commit.sha) {
         return commit;
       }
@@ -390,9 +412,11 @@ export async function runExportPipeline(
             }),
         );
       } catch (error) {
+        throwIfAborted(deps.signal);
         if (isAbortError(error)) {
           throw error;
         }
+        failedCommitFetchCount += 1;
         return commit;
       }
     });
@@ -403,6 +427,10 @@ export async function runExportPipeline(
     });
   }
 
+  const commitDiffWarning = failedCommitFetchCount > 0
+    ? `${failedCommitFetchCount} commit diff(s) could not be downloaded, so some commit diffs may be missing.`
+    : undefined;
+
   const finalCommits = plan.includeCommitDiffs && plan.smartDiffMode
     ? applySmartDiffMode(detailedCommits, files)
     : detailedCommits;
@@ -410,7 +438,7 @@ export async function runExportPipeline(
   let resolvedFilterWarning: string | undefined;
   let reviewCommentResolution: Map<number, boolean> | null = null;
 
-  if (plan.shouldFetchReviewThreadResolution) {
+  if (plan.shouldFetchReviewThreadResolution && reviewComments.length) {
     try {
       const resolution = await deps.client.getPullReviewThreadResolution({
         owner: request.target.owner,
@@ -424,6 +452,7 @@ export async function runExportPipeline(
           'Resolved-thread filtering may be incomplete because some review threads exceeded comment pagination limits.';
       }
     } catch (error) {
+      throwIfAborted(deps.signal);
       if (isAbortError(error)) {
         throw error;
       }
@@ -431,24 +460,10 @@ export async function runExportPipeline(
         'Unable to determine resolved review threads; exported review comments without resolved filtering.';
     }
   }
+  throwIfAborted(deps.signal);
 
-  const range = readSelectionRange(request);
-  if (range?.start || range?.end) {
-    const timelineEvents = buildTimelineEvents({
-      commits: plan.includeCommits ? finalCommits : undefined,
-      issueComments: plan.includeIssueComments ? issueComments : undefined,
-      reviewComments: plan.includeReviewComments ? reviewComments : undefined,
-      reviews: plan.includeReviews ? reviews : undefined,
-    });
-
-    const sliceResult = slicePullTimeline(timelineEvents, range);
-    if ('error' in sliceResult) {
-      throw new ExportPipelineError('invalidSelection', sliceResult.error);
-    }
-
-    const selectedCommits = sliceResult.events
-      .filter(isCommitEvent)
-      .map((event) => event.commit);
+  if (timelineSelection) {
+    const sliceResult = timelineSelection;
     const selectedIssueComments = sliceResult.events
       .filter(isIssueCommentEvent)
       .map((event) => event.comment);
@@ -466,14 +481,14 @@ export async function runExportPipeline(
     return {
       markdown: prToMarkdown({
         pr,
-        commits: plan.includeCommits ? selectedCommits : undefined,
+        commits: plan.includeCommits ? finalCommits : undefined,
         files: plan.includeFileDiffs ? files : undefined,
         issueComments: plan.includeIssueComments ? selectedIssueComments : undefined,
         reviewComments: plan.includeReviewComments ? resolvedFilterResult.reviewComments : undefined,
         reviews: plan.includeReviews ? selectedReviews : undefined,
         options: plan.options,
       }),
-      warning: combineWarnings(sliceResult.warning, resolvedFilterWarning, resolvedFilterResult.warning),
+      warning: combineWarnings(sliceResult.warning, commitDiffWarning, resolvedFilterWarning, resolvedFilterResult.warning),
     };
   }
 
@@ -491,6 +506,6 @@ export async function runExportPipeline(
       reviews: plan.includeReviews ? reviews : undefined,
       options: plan.options,
     }),
-    warning: combineWarnings(resolvedFilterWarning, resolvedFilterResult.warning),
+    warning: combineWarnings(commitDiffWarning, resolvedFilterWarning, resolvedFilterResult.warning),
   };
 }

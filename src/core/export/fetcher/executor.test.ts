@@ -32,4 +32,29 @@ describe('executeTasks', () => {
       }),
     ).rejects.toThrow('aborted');
   });
+
+  it('rejects cancellation while the final task is in flight', async () => {
+    const controller = new AbortController();
+    await expect(executeTasks([async () => {
+      controller.abort();
+      return 1;
+    }], { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('stops dispatching queued work after a worker fails', async () => {
+    let finishRunningTask!: () => void;
+    let queuedTaskRan = false;
+    const error = new Error('rate limited');
+    const result = executeTasks([
+      async () => { throw error; },
+      () => new Promise<number>((resolve) => { finishRunningTask = () => resolve(1); }),
+      async () => { queuedTaskRan = true; return 2; },
+    ], { concurrency: 2 });
+
+    await expect(result).rejects.toBe(error);
+    finishRunningTask();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(queuedTaskRan).toBe(false);
+  });
 });

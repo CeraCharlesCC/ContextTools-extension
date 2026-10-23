@@ -9,7 +9,10 @@ const navigationWatcher = createNavigationWatcher(() => {
   controller.onNavigation();
 });
 
-window.addEventListener('beforeunload', () => {
+window.addEventListener('pagehide', (event) => {
+  // A canceled beforeunload must keep the controls working. Pages retained in
+  // the back/forward cache resume with the same controller and DOM listeners.
+  if (event.persisted) return;
   navigationWatcher.dispose();
   controller.dispose();
 });

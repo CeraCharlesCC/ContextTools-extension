@@ -137,6 +137,14 @@ function setEntryProfile(entry: LastProfileEntry, profile: ExportProfile): LastP
 }
 
 export class LastProfileStore {
+  private pending: Promise<unknown> = Promise.resolve();
+
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.pending.then(operation);
+    this.pending = result.catch(() => undefined);
+    return result;
+  }
+
   private async readState(): Promise<LastProfileStateV1> {
     const stored = await storageGet<unknown>(LAST_PROFILE_STORAGE_KEY);
     return normalizeState(stored);
@@ -147,28 +155,32 @@ export class LastProfileStore {
   }
 
   async get(scope: RememberScope, target: Target): Promise<ExportProfile | null> {
-    const state = await this.readState();
+    return this.enqueue(async () => {
+      const state = await this.readState();
 
-    if (scope === 'global') {
-      return profileFromEntry(state.global, target);
-    }
+      if (scope === 'global') {
+        return profileFromEntry(state.global, target);
+      }
 
-    const repoEntry = state.repo[targetRepoKey(target)] ?? {};
-    return profileFromEntry(repoEntry, target);
+      const repoEntry = state.repo[targetRepoKey(target)] ?? {};
+      return profileFromEntry(repoEntry, target);
+    });
   }
 
   async set(scope: RememberScope, target: Target, profile: ExportProfile): Promise<void> {
-    const state = await this.readState();
+    return this.enqueue(async () => {
+      const state = await this.readState();
 
-    if (scope === 'global') {
-      state.global = setEntryProfile(state.global, profile);
+      if (scope === 'global') {
+        state.global = setEntryProfile(state.global, profile);
+        await this.writeState(state);
+        return;
+      }
+
+      const repoKey = targetRepoKey(target);
+      const existing = state.repo[repoKey] ?? {};
+      state.repo[repoKey] = setEntryProfile(existing, profile);
       await this.writeState(state);
-      return;
-    }
-
-    const repoKey = targetRepoKey(target);
-    const existing = state.repo[repoKey] ?? {};
-    state.repo[repoKey] = setEntryProfile(existing, profile);
-    await this.writeState(state);
+    });
   }
 }

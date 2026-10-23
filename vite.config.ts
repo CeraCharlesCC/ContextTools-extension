@@ -47,7 +47,7 @@ const mainConfig: UserConfig = {
   ...commonConfig,
   build: {
     outDir,
-    emptyOutDir: true,
+    emptyOutDir: !process.argv.includes('--watch'),
     sourcemap: process.env.NODE_ENV === 'development' ? 'inline' : false,
     minify: process.env.NODE_ENV === 'production',
     rollupOptions: {
@@ -103,15 +103,6 @@ const mainConfig: UserConfig = {
         const nestedSrcDir = resolve(__dirname, outDir, 'src');
         if (existsSync(nestedSrcDir)) {
           rmSync(nestedSrcDir, { recursive: true, force: true });
-        }
-
-        // Copy static assets
-        const assetsDir = resolve(__dirname, 'src/assets');
-        const destAssetsDir = resolve(__dirname, outDir, 'assets');
-        if (existsSync(assetsDir)) {
-          if (!existsSync(destAssetsDir)) {
-            mkdirSync(destAssetsDir, { recursive: true });
-          }
         }
       },
     },

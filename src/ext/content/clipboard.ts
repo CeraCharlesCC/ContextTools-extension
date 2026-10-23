@@ -1,7 +1,12 @@
 export async function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Firefox and browser permissions can reject the async clipboard API.
+      // Try the extension's legacy clipboard permission before reporting failure.
+    }
   }
 
   const textarea = document.createElement('textarea');
@@ -13,7 +18,9 @@ export async function copyToClipboard(text: string): Promise<void> {
   textarea.select();
 
   try {
-    document.execCommand('copy');
+    if (!document.execCommand('copy')) {
+      throw new Error('Unable to copy Markdown to the clipboard.');
+    }
   } finally {
     document.body.removeChild(textarea);
   }

@@ -34,3 +34,9 @@ export function isAbortError(error: unknown): boolean {
 
   return false;
 }
+
+export function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError');
+  }
+}

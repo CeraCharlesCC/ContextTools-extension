@@ -5,6 +5,7 @@ import {
   type ExportProfile,
   type ExportRequest,
   type ExportResult,
+  type SettingsV1,
   type Target,
 } from '@core/index';
 import type { SettingsService } from './SettingsService';
@@ -43,6 +44,10 @@ export class ExportService {
 
   async getEffectiveProfile(input: EffectiveProfileInput): Promise<EffectiveProfileResult> {
     const settings = await this.settingsService.getSettings();
+    return this.resolveProfile(input, settings);
+  }
+
+  private async resolveProfile(input: EffectiveProfileInput, settings: SettingsV1): Promise<EffectiveProfileResult> {
     const rememberedProfile = settings.behavior.rememberLastUsed
       ? await this.lastProfileStore.get(settings.behavior.rememberScope, input.target)
       : null;
@@ -56,18 +61,27 @@ export class ExportService {
   }
 
   async run(request: ExportRequest): Promise<ExportResult> {
-    const settings = await this.settingsService.getSettings();
-    const effective = await this.getEffectiveProfile({
-      target: request.target,
-      profile: request.profile,
-    });
+    if (this.inFlight.has(request.requestId)) {
+      return { ok: false, code: 'invalidRequest', message: 'An export with this request ID is already running.' };
+    }
 
-    const token = await this.authService.getToken();
-    const client = this.createGitHubClientFn({ token });
+    // Register before storage reads so an immediate cancellation cannot be lost.
     const controller = new AbortController();
     this.inFlight.set(request.requestId, controller);
+    const aborted: ExportResult = { ok: false, code: 'aborted', message: 'Export was canceled.' };
 
     try {
+      const settings = await this.settingsService.getSettings();
+      const effective = await this.resolveProfile({
+        target: request.target,
+        profile: request.profile,
+      }, settings);
+      const token = await this.authService.getToken();
+      if (controller.signal.aborted) {
+        return aborted;
+      }
+
+      const client = this.createGitHubClientFn({ token });
       const result = await this.runExportFn(
         {
           ...request,
@@ -82,16 +96,28 @@ export class ExportService {
         },
       );
 
+      if (controller.signal.aborted) {
+        return aborted;
+      }
+
       if (
         result.ok &&
         settings.behavior.rememberLastUsed &&
         request.profile &&
         request.profile.kind === request.target.kind
       ) {
-        await this.lastProfileStore.set(settings.behavior.rememberScope, request.target, effective.profile);
+        try {
+          await this.lastProfileStore.set(settings.behavior.rememberScope, request.target, effective.profile);
+        } catch {
+          if (controller.signal.aborted) {
+            return aborted;
+          }
+          const warning = 'The export completed, but the last-used profile could not be saved.';
+          return { ...result, warning: result.warning ? `${result.warning}\n${warning}` : warning };
+        }
       }
 
-      return result;
+      return controller.signal.aborted ? aborted : result;
     } finally {
       this.inFlight.delete(request.requestId);
     }
@@ -101,7 +127,6 @@ export class ExportService {
     const controller = this.inFlight.get(requestId);
     if (controller) {
       controller.abort();
-      this.inFlight.delete(requestId);
     }
 
     return { ok: true };

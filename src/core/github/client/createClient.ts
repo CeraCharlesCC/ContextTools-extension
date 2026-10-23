@@ -10,14 +10,11 @@ import type {
   GitHubPullReviewComment,
   PullReviewThreadResolution,
 } from '@core/github/types';
-import { GitHubApiError, isAbortError, type RateLimitMetadata } from './errors';
+import { GitHubApiError, throwIfAborted, type RateLimitMetadata } from './errors';
 import type {
-  CommitTarget,
   GitHubClient,
   GitHubClientOptions,
-  JobTarget,
-  NumberedTarget,
-  RunTarget,
+  OwnerRepo,
 } from './types';
 
 const DEFAULT_API_ROOT = 'https://api.github.com';
@@ -55,18 +52,6 @@ interface PullReviewThreadResolutionQueryData {
       reviewThreads?: PullReviewThreadGraphQLConnection | null;
     } | null;
   } | null;
-}
-
-interface PullReviewThreadRESTComment {
-  id?: number | null;
-  databaseId?: number | null;
-  database_id?: number | null;
-}
-
-interface PullReviewThreadREST {
-  resolved?: boolean | null;
-  isResolved?: boolean | null;
-  comments?: PullReviewThreadRESTComment[] | null;
 }
 
 const REVIEW_THREAD_RESOLUTION_QUERY = `
@@ -230,8 +215,14 @@ async function fetchAllPages<T>(params: {
 }): Promise<T[]> {
   const results: T[] = [];
   let nextUrl: string | null = params.url;
+  const visitedUrls = new Set<string>();
 
   while (nextUrl) {
+    throwIfAborted(params.signal);
+    if (visitedUrls.has(nextUrl)) {
+      throw new Error('GitHub API error: Repeated pagination URL in Link header.');
+    }
+    visitedUrls.add(nextUrl);
     const response = await params.fetchFn(nextUrl, {
       headers: buildHeaders(params.token),
       signal: params.signal,
@@ -263,8 +254,14 @@ async function fetchAllPagesExtract<T>(params: {
 }): Promise<T[]> {
   const results: T[] = [];
   let nextUrl: string | null = params.url;
+  const visitedUrls = new Set<string>();
 
   while (nextUrl) {
+    throwIfAborted(params.signal);
+    if (visitedUrls.has(nextUrl)) {
+      throw new Error('GitHub API error: Repeated pagination URL in Link header.');
+    }
+    visitedUrls.add(nextUrl);
     const response = await params.fetchFn(nextUrl, {
       headers: buildHeaders(params.token),
       signal: params.signal,
@@ -294,7 +291,9 @@ async function fetchGraphQL<T>(params: {
   query: string;
   variables: Record<string, unknown>;
 }): Promise<T> {
-  const response = await params.fetchFn(`${params.apiRoot}/graphql`, {
+  throwIfAborted(params.signal);
+  const graphqlRoot = params.apiRoot.replace(/\/api\/v3$/, '/api');
+  const response = await params.fetchFn(`${graphqlRoot}/graphql`, {
     method: 'POST',
     headers: {
       ...buildHeaders(params.token),
@@ -313,6 +312,7 @@ async function fetchGraphQL<T>(params: {
   } catch {
     // Surface fallback HTTP error below.
   }
+  throwIfAborted(params.signal);
 
   if (!response.ok) {
     const messages = body?.errors?.map((error) => error.message).filter(Boolean);
@@ -337,70 +337,6 @@ async function fetchGraphQL<T>(params: {
   return body.data;
 }
 
-function resolveCommentId(comment: PullReviewThreadRESTComment): number | null {
-  if (typeof comment.id === 'number') return comment.id;
-  if (typeof comment.databaseId === 'number') return comment.databaseId;
-  if (typeof comment.database_id === 'number') return comment.database_id;
-  return null;
-}
-
-function resolveThreadState(thread: PullReviewThreadREST): boolean | null {
-  if (typeof thread.resolved === 'boolean') return thread.resolved;
-  if (typeof thread.isResolved === 'boolean') return thread.isResolved;
-  return null;
-}
-
-async function getPullReviewThreadResolutionFromRest(params: {
-  fetchFn: typeof fetch;
-  apiRoot: string;
-  trustedOrigin: string;
-  owner: string;
-  repo: string;
-  number: number;
-  token?: string;
-  signal?: AbortSignal;
-}): Promise<PullReviewThreadResolution> {
-  const url = `${params.apiRoot}/repos/${params.owner}/${params.repo}/pulls/${params.number}/threads?per_page=100`;
-  const threads = await fetchAllPages<PullReviewThreadREST>({
-    fetchFn: params.fetchFn,
-    url,
-    token: params.token,
-    signal: params.signal,
-    trustedOrigin: params.trustedOrigin,
-    apiRoot: params.apiRoot,
-  });
-
-  const commentResolution = new Map<number, boolean>();
-  let incomplete = false;
-
-  threads.forEach((thread) => {
-    const isResolved = resolveThreadState(thread);
-    if (isResolved === null) {
-      incomplete = true;
-      return;
-    }
-
-    if (!Array.isArray(thread.comments)) {
-      incomplete = true;
-      return;
-    }
-
-    thread.comments.forEach((comment) => {
-      const commentId = resolveCommentId(comment);
-      if (commentId === null) {
-        incomplete = true;
-        return;
-      }
-      commentResolution.set(commentId, isResolved);
-    });
-  });
-
-  return {
-    commentResolution,
-    incomplete,
-  };
-}
-
 async function getPullReviewThreadResolutionFromGraphQL(params: {
   fetchFn: typeof fetch;
   apiRoot: string;
@@ -413,6 +349,7 @@ async function getPullReviewThreadResolutionFromGraphQL(params: {
   const commentResolution = new Map<number, boolean>();
   let incomplete = false;
   let after: string | null = null;
+  const visitedCursors = new Set<string>();
 
   for (;;) {
     const data: PullReviewThreadResolutionQueryData = await fetchGraphQL<PullReviewThreadResolutionQueryData>({
@@ -456,7 +393,12 @@ async function getPullReviewThreadResolutionFromGraphQL(params: {
       break;
     }
 
-    after = reviewThreads.pageInfo.endCursor ?? null;
+    const nextCursor = reviewThreads.pageInfo.endCursor;
+    if (!nextCursor || visitedCursors.has(nextCursor)) {
+      throw new Error('GitHub API error: Missing or repeated review thread pagination cursor.');
+    }
+    visitedCursors.add(nextCursor);
+    after = nextCursor;
   }
 
   return {
@@ -465,19 +407,12 @@ async function getPullReviewThreadResolutionFromGraphQL(params: {
   };
 }
 
-function toNumberedTarget(params: NumberedTarget): NumberedTarget {
-  return params;
-}
-
-function toRunTarget(params: RunTarget): RunTarget {
-  return params;
-}
-
-function toJobTarget(params: JobTarget): JobTarget {
-  return params;
-}
-
-function toCommitTarget(params: CommitTarget): CommitTarget {
+function validateTarget<T extends OwnerRepo>(params: T): T {
+  if (!/^[a-z\d-]+$/i.test(params.owner)
+    || !/^[a-z\d_.-]+$/i.test(params.repo)
+    || params.repo === '.' || params.repo === '..') {
+    throw new Error('Invalid GitHub repository owner or name.');
+  }
   return params;
 }
 
@@ -485,12 +420,12 @@ export function createGitHubClient(options: GitHubClientOptions = {}): GitHubCli
   const fetchImpl = options.fetchFn ?? globalThis.fetch;
   const fetchFn = ((...args: Parameters<typeof fetch>) => fetchImpl.call(globalThis, ...args)) as typeof fetch;
   const token = options.token;
-  const apiRoot = options.apiRoot ?? DEFAULT_API_ROOT;
+  const apiRoot = (options.apiRoot ?? DEFAULT_API_ROOT).replace(/\/+$/, '');
   const trustedOrigin = new URL(apiRoot).origin;
 
   return {
     async getIssue(rawParams) {
-      const params = toNumberedTarget(rawParams);
+      const params = validateTarget(rawParams);
       return fetchJson<GitHubIssue>({
         fetchFn,
         url: `${apiRoot}/repos/${params.owner}/${params.repo}/issues/${params.number}`,
@@ -500,7 +435,7 @@ export function createGitHubClient(options: GitHubClientOptions = {}): GitHubCli
     },
 
     async getIssueComments(rawParams) {
-      const params = toNumberedTarget(rawParams);
+      const params = validateTarget(rawParams);
       return fetchAllPages<GitHubIssueComment>({
         fetchFn,
         url: `${apiRoot}/repos/${params.owner}/${params.repo}/issues/${params.number}/comments?per_page=100`,
@@ -512,7 +447,7 @@ export function createGitHubClient(options: GitHubClientOptions = {}): GitHubCli
     },
 
     async getPullRequest(rawParams) {
-      const params = toNumberedTarget(rawParams);
+      const params = validateTarget(rawParams);
       return fetchJson<GitHubPullRequest>({
         fetchFn,
         url: `${apiRoot}/repos/${params.owner}/${params.repo}/pulls/${params.number}`,
@@ -522,7 +457,7 @@ export function createGitHubClient(options: GitHubClientOptions = {}): GitHubCli
     },
 
     async getPullFiles(rawParams) {
-      const params = toNumberedTarget(rawParams);
+      const params = validateTarget(rawParams);
       return fetchAllPages<GitHubPullFile>({
         fetchFn,
         url: `${apiRoot}/repos/${params.owner}/${params.repo}/pulls/${params.number}/files?per_page=100`,
@@ -534,7 +469,7 @@ export function createGitHubClient(options: GitHubClientOptions = {}): GitHubCli
     },
 
     async getPullCommits(rawParams) {
-      const params = toNumberedTarget(rawParams);
+      const params = validateTarget(rawParams);
       return fetchAllPages<GitHubCommit>({
         fetchFn,
         url: `${apiRoot}/repos/${params.owner}/${params.repo}/pulls/${params.number}/commits?per_page=100`,
@@ -546,17 +481,27 @@ export function createGitHubClient(options: GitHubClientOptions = {}): GitHubCli
     },
 
     async getCommit(rawParams) {
-      const params = toCommitTarget(rawParams);
-      return fetchJson<GitHubCommit>({
+      const params = validateTarget(rawParams);
+      if (!params.sha || params.sha === '.' || params.sha === '..') {
+        throw new Error('Invalid GitHub commit reference.');
+      }
+      const pages = await fetchAllPagesExtract<GitHubCommit>({
         fetchFn,
-        url: `${apiRoot}/repos/${params.owner}/${params.repo}/commits/${params.sha}`,
+        url: `${apiRoot}/repos/${params.owner}/${params.repo}/commits/${encodeURIComponent(params.sha)}?per_page=100`,
         token,
         signal: params.signal,
+        trustedOrigin,
+        apiRoot,
+        extract: (json) => [json as GitHubCommit],
       });
+      return {
+        ...pages[0],
+        files: pages.flatMap((page) => page.files ?? []),
+      };
     },
 
     async getPullReviews(rawParams) {
-      const params = toNumberedTarget(rawParams);
+      const params = validateTarget(rawParams);
       return fetchAllPages<GitHubPullReview>({
         fetchFn,
         url: `${apiRoot}/repos/${params.owner}/${params.repo}/pulls/${params.number}/reviews?per_page=100`,
@@ -568,7 +513,7 @@ export function createGitHubClient(options: GitHubClientOptions = {}): GitHubCli
     },
 
     async getPullReviewComments(rawParams) {
-      const params = toNumberedTarget(rawParams);
+      const params = validateTarget(rawParams);
       return fetchAllPages<GitHubPullReviewComment>({
         fetchFn,
         url: `${apiRoot}/repos/${params.owner}/${params.repo}/pulls/${params.number}/comments?per_page=100`,
@@ -580,50 +525,21 @@ export function createGitHubClient(options: GitHubClientOptions = {}): GitHubCli
     },
 
     async getPullReviewThreadResolution(rawParams) {
-      const params = toNumberedTarget(rawParams);
+      const params = validateTarget(rawParams);
 
-      try {
-        return await getPullReviewThreadResolutionFromRest({
-          fetchFn,
-          apiRoot,
-          trustedOrigin,
-          owner: params.owner,
-          repo: params.repo,
-          number: params.number,
-          token,
-          signal: params.signal,
-        });
-      } catch (restError) {
-        if (isAbortError(restError)) {
-          throw restError;
-        }
-
-        try {
-          return await getPullReviewThreadResolutionFromGraphQL({
-            fetchFn,
-            apiRoot,
-            owner: params.owner,
-            repo: params.repo,
-            number: params.number,
-            token,
-            signal: params.signal,
-          });
-        } catch (graphqlError) {
-          if (isAbortError(graphqlError)) {
-            throw graphqlError;
-          }
-
-          const restMessage = restError instanceof Error ? restError.message : String(restError);
-          const graphqlMessage = graphqlError instanceof Error ? graphqlError.message : String(graphqlError);
-          throw new Error(
-            `Failed to load review thread resolution via REST and GraphQL. REST: ${restMessage}. GraphQL: ${graphqlMessage}`,
-          );
-        }
-      }
+      return getPullReviewThreadResolutionFromGraphQL({
+        fetchFn,
+        apiRoot,
+        owner: params.owner,
+        repo: params.repo,
+        number: params.number,
+        token,
+        signal: params.signal,
+      });
     },
 
     async getActionsRun(rawParams) {
-      const params = toRunTarget(rawParams);
+      const params = validateTarget(rawParams);
       return fetchJson<GitHubActionsRun>({
         fetchFn,
         url: `${apiRoot}/repos/${params.owner}/${params.repo}/actions/runs/${params.runId}`,
@@ -633,7 +549,7 @@ export function createGitHubClient(options: GitHubClientOptions = {}): GitHubCli
     },
 
     async getActionsRunJobs(rawParams) {
-      const params = toRunTarget(rawParams);
+      const params = validateTarget(rawParams);
       return fetchAllPagesExtract<GitHubActionsJob>({
         fetchFn,
         url: `${apiRoot}/repos/${params.owner}/${params.repo}/actions/runs/${params.runId}/jobs?per_page=100`,
@@ -649,7 +565,7 @@ export function createGitHubClient(options: GitHubClientOptions = {}): GitHubCli
     },
 
     async getActionsJobLogs(rawParams) {
-      const params = toJobTarget(rawParams);
+      const params = validateTarget(rawParams);
       return fetchText({
         fetchFn,
         url: `${apiRoot}/repos/${params.owner}/${params.repo}/actions/jobs/${params.jobId}/logs`,

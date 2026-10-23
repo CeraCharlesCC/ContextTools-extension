@@ -24,19 +24,26 @@ export function runtimeSendMessage<TMessage, TResponse>(message: TMessage): Prom
 
 export function addRuntimeMessageListener<TMessage, TResponse>(
   handler: RuntimeMessageHandler<TMessage, TResponse>,
+  accepts: (message: TMessage) => boolean = () => true,
 ): Parameters<typeof chrome.runtime.onMessage.addListener>[0] {
   const wrapped = (
     message: TMessage,
     sender: chrome.runtime.MessageSender,
     sendResponse: (response: TResponse) => void,
   ): boolean => {
+    // Leave other listeners free to respond to messages outside this protocol.
+    if (!accepts(message)) {
+      return false;
+    }
+
     const mappedSender: RuntimeMessageSender = {
       tabId: sender.tab?.id,
       frameId: sender.frameId,
       url: sender.url,
     };
 
-    Promise.resolve(handler(message, mappedSender))
+    Promise.resolve()
+      .then(() => handler(message, mappedSender))
       .then((response) => {
         sendResponse(response);
       })

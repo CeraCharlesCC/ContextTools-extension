@@ -33,6 +33,14 @@ const pullCustomOptionInputs: Record<keyof PullExportOptions, HTMLInputElement> 
   ignoreResolvedComments: document.getElementById('pull-custom-ignore-resolved-comments-toggle') as HTMLInputElement,
 };
 
+const settingsControls = [
+  rememberLastUsedToggle, rememberScopeSelect, pullEnabledToggle, issueEnabledToggle,
+  actionsEnabledToggle, pullDefaultPresetSelect, issueTimelineModeToggle,
+  actionsDefaultPresetSelect, ...Object.values(pullCustomOptionInputs),
+];
+settingsControls.forEach((control) => { control.disabled = true; });
+githubTokenInput.disabled = true;
+
 function showStatus(message: string, type: 'success' | 'error'): void {
   saveStatusEl.textContent = message;
   saveStatusEl.className = `save-status visible ${type}`;
@@ -88,7 +96,6 @@ async function loadSettings(): Promise<void> {
 
     rememberLastUsedToggle.checked = settings.behavior.rememberLastUsed;
     rememberScopeSelect.value = settings.behavior.rememberScope;
-    updateRememberScopeAvailability();
 
     pullEnabledToggle.checked = settings.enabled.pull;
     issueEnabledToggle.checked = settings.enabled.issue;
@@ -98,10 +105,12 @@ async function loadSettings(): Promise<void> {
     (Object.keys(pullCustomOptionInputs) as Array<keyof PullExportOptions>).forEach((key) => {
       pullCustomOptionInputs[key].checked = settings.defaults.pull.options[key];
     });
-    updateSmartDiffControl();
 
     issueTimelineModeToggle.checked = settings.defaults.issue.timelineMode;
     actionsDefaultPresetSelect.value = settings.defaults.actionsRun.preset;
+    settingsControls.forEach((control) => { control.disabled = false; });
+    updateRememberScopeAvailability();
+    updateSmartDiffControl();
   } catch {
     showStatus('Failed to load settings', 'error');
   }
@@ -111,6 +120,7 @@ async function loadToken(): Promise<void> {
   try {
     const result = await bridgeClient.call('auth.getToken', null);
     githubTokenInput.value = result.token;
+    githubTokenInput.disabled = false;
   } catch {
     showStatus('Failed to load token', 'error');
   }

@@ -5,6 +5,8 @@ const issueEnabledToggle = document.getElementById('issue-enabled-toggle') as HT
 const actionsEnabledToggle = document.getElementById('actions-enabled-toggle') as HTMLInputElement;
 const pageInfoEl = document.getElementById('page-info') as HTMLElement;
 const optionsBtn = document.getElementById('options-btn') as HTMLButtonElement;
+const enabledToggles = [pullEnabledToggle, issueEnabledToggle, actionsEnabledToggle];
+enabledToggles.forEach((toggle) => { toggle.disabled = true; });
 
 function clearPageInfo(): void {
   while (pageInfoEl.firstChild) {
@@ -43,6 +45,7 @@ async function loadSettings(): Promise<void> {
     pullEnabledToggle.checked = settings.enabled.pull;
     issueEnabledToggle.checked = settings.enabled.issue;
     actionsEnabledToggle.checked = settings.enabled.actionsRun;
+    enabledToggles.forEach((toggle) => { toggle.disabled = false; });
   } catch {
     // Keep UI unchanged if settings cannot be loaded.
   }
@@ -69,12 +72,16 @@ async function loadPageInfo(): Promise<void> {
 
 function bindEnabledToggle(toggle: HTMLInputElement, key: 'pull' | 'issue' | 'actionsRun'): void {
   toggle.addEventListener('change', () => {
+    const previousValue = !toggle.checked;
+    toggle.disabled = true;
     void bridgeClient.call('settings.patch', {
       enabled: {
         [key]: toggle.checked,
       },
     }).catch(() => {
-      toggle.checked = !toggle.checked;
+      toggle.checked = previousValue;
+    }).finally(() => {
+      toggle.disabled = false;
     });
   });
 }
